@@ -81,7 +81,7 @@ tab_news, tab_hist, tab_vid = st.tabs(
 with tab_news:
     st.subheader("▶ 구글 뉴스 크롤링 (RSS)")
     keyword = st.text_input("검색 키워드", value="ESG", key="kw_input")
-    num = st.slider("가져올 기사 개수", 5, 20, 10, key="num_slider")
+    num = st.slider("가져올 기사 개수", 5, 30, 10, key="num_slider")
 
     if st.button("최신 뉴스 보기", key="news_btn"):
         with st.spinner(f"‘{keyword}’ 뉴스 불러오는 중…"):
