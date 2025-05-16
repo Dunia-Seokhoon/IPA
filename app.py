@@ -1,52 +1,51 @@
+# ─────────────────────────────────────────────
+# app.py  |  Streamlit 통합 데모
+# ─────────────────────────────────────────────
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import requests
+import feedparser
 from bs4 import BeautifulSoup
+from datetime import datetime
 
-# 1) 네이버 ESG 뉴스 크롤러
+# ────────────────── 1) 뉴스 크롤러 (Google News RSS)
 @st.cache_data(ttl=300)
-def fetch_naver_esg_news():
-    url = "https://search.naver.com/search.naver"
-    params = {
-        "where": "news",
-        "query": "ESG",
-        "sm": "tab_opt",
-        "sort": 0,
-        "start": 1
-    }
-    resp = requests.get(url, params=params, headers={
-        "User-Agent": "Mozilla/5.0"
-    })
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "html.parser")
+def fetch_google_news(keyword: str, max_items: int = 10):
+    """
+    Google News RSS 피드에서 keyword 검색 결과를 최대 max_items개 가져온다.
+    반환: [{title, link, source, date}, …]
+    """
+    rss_url = (
+        "https://news.google.com/rss/search?"
+        f"q={keyword}&hl=ko&gl=KR&ceid=KR:ko"
+    )
+    feed = feedparser.parse(rss_url)
 
     items = []
-    for li in soup.select("ul.list_news > li"):
-        a = li.select_one("a.news_tit")
-        if not a:
-            continue
-        title = a["title"]
-        link  = a["href"]
-        source_tag = li.select_one("a.info.press")
-        source = source_tag.get_text(strip=True) if source_tag else ""
-        date_tag = li.select_one("span.info")
-        date = date_tag.get_text(strip=True) if date_tag else ""
-        items.append({
-            "title": title,
-            "link": link,
-            "source": source,
-            "date": date
-        })
+    for entry in feed.entries[:max_items]:
+        pub_date = datetime(*entry.published_parsed[:6]).strftime("%Y-%m-%d")
+        source = entry.source.title if "source" in entry else ""
+        items.append(
+            {
+                "title": entry.title,
+                "link": entry.link,
+                "source": source,
+                "date": pub_date,
+            }
+        )
     return items
 
-# 2) 기본 샘플 CSV 히스토그램 UI
+# ────────────────── 2) CSV 히스토그램 섹션
 def sample_data_section():
-    st.subheader("샘플 데이터 히스토그램")
-    uploaded_file = st.file_uploader("CSV 파일 업로드 (optional)", type=["csv"])
+    st.subheader("📊 샘플 데이터 히스토그램")
+    uploaded_file = st.file_uploader(
+        "CSV 파일 업로드 (optional)", type=["csv"]
+    )
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
         st.write(df)
+
         numeric_cols = df.select_dtypes(include="number").columns.tolist()
         if numeric_cols:
             col = st.selectbox("Numeric 컬럼 선택", numeric_cols)
@@ -56,17 +55,40 @@ def sample_data_section():
             ax.set_ylabel("Frequency")
             st.pyplot(fig)
     else:
-        st.info("샘플 CSV 파일을 업로드하거나, 아래 버튼으로 뉴스만 확인하세요.")
+        st.info("CSV 파일을 올리면 데이터 미리보기와 히스토그램을 볼 수 있습니다.")
 
-# 3) Streamlit 앱 레이아웃
-st.title("📈 ESG 뉴스 & 샘플 데이터 데모")
+# ────────────────── 3) 동영상 업로드·재생 섹션
+def video_upload_section():
+    st.subheader("📹 동영상 업로드 & 재생")
+    video_file = st.file_uploader(
+        "동영상 파일 업로드 (MP4 / MOV / AVI)",
+        type=["mp4", "mov", "avi"],
+        key="video_uploader",
+    )
+    if video_file:
+        st.video(video_file)
+    else:
+        st.info("위 버튼으로 동영상 파일을 선택하세요.")
 
-with st.expander("▶ ESG 뉴스 불러오기", expanded=True):
-    if st.button("최신 ESG 뉴스 보기"):
-        with st.spinner("뉴스를 불러오는 중..."):
-            news = fetch_naver_esg_news()
-        if news:
-            for item in news:
+# ────────────────── 4) 앱 레이아웃 (탭 구성)
+st.set_page_config(page_title="통합 데모", layout="centered")
+st.title("📈 통합 데모: 구글 뉴스 · 데이터 · 동영상")
+
+tab_news, tab_hist, tab_vid = st.tabs(
+    ["구글 뉴스", "데이터 히스토그램", "동영상 재생"]
+)
+
+with tab_news:
+    st.subheader("▶ 구글 뉴스 크롤링 (RSS)")
+    keyword = st.text_input("검색 키워드", value="ESG", key="kw_input")
+    num = st.slider("가져올 기사 개수", 5, 20, 10, key="num_slider")
+
+    if st.button("최신 뉴스 보기", key="news_btn"):
+        with st.spinner(f"‘{keyword}’ 뉴스 불러오는 중…"):
+            news_items = fetch_google_news(keyword, num)
+
+        if news_items:
+            for item in news_items:
                 st.markdown(
                     f"- **[{item['source']} · {item['date']}]** "
                     f"[{item['title']}]({item['link']})"
@@ -74,6 +96,10 @@ with st.expander("▶ ESG 뉴스 불러오기", expanded=True):
         else:
             st.warning("뉴스를 찾을 수 없습니다.")
 
-st.markdown("---")
-sample_data_section()
+with tab_hist:
+    sample_data_section()
+
+with tab_vid:
+    video_upload_section()
+
 
