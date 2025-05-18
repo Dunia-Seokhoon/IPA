@@ -5,22 +5,13 @@ import matplotlib.pyplot as plt
 import feedparser
 import requests
 from datetime import datetime, date
-from urllib.parse import urlencode
+from urllib.parse import urlencode, unquote
 
 # ────────────────── 1) 뉴스 크롤러 (Google News RSS)
 @st.cache_data(ttl=300)
 def fetch_google_news(keyword: str, max_items: int = 10):
-    """
-    Google News RSS 피드에서 keyword 검색 결과를 최대 max_items개 가져온다.
-    반환: [{title, link, source, date}, …]
-    """
     clean_kw = " ".join(keyword.strip().split())
-    params = {
-        "q": clean_kw,
-        "hl": "ko",
-        "gl": "KR",
-        "ceid": "KR:ko",
-    }
+    params = {"q": clean_kw, "hl": "ko", "gl": "KR", "ceid": "KR:ko"}
     rss_url = "https://news.google.com/rss/search?" + urlencode(params, doseq=True)
     feed = feedparser.parse(rss_url)
 
@@ -43,9 +34,9 @@ def sample_data_section():
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
         st.write(df)
-        numeric_cols = df.select_dtypes(include="number").columns.tolist()
-        if numeric_cols:
-            col = st.selectbox("Numeric 컬럼 선택", numeric_cols)
+        nums = df.select_dtypes(include="number").columns.tolist()
+        if nums:
+            col = st.selectbox("Numeric 컬럼 선택", nums)
             fig, ax = plt.subplots()
             ax.hist(df[col], bins=10)
             ax.set_xlabel(col)
@@ -70,11 +61,12 @@ def video_upload_section():
 # ────────────────── 4) 선박 관제정보 조회 섹션
 def vessel_monitoring_section():
     st.subheader("🚢 해양수산부 선박 관제정보 조회")
-    api_key   = st.text_input(
+    api_key_raw = st.text_input(
         "🔑 데이터.go.kr 서비스키",
         type="password",
-        help="https://www.data.go.kr/ 에서 발급받은 일반 인증키(Encoding) 값을 입력하세요."
+        help="포털의 ‘일반 인증키 (Encoding)’ 를 그대로 붙여넣으세요."
     )
+
     col1, col2 = st.columns(2)
     with col1:
         date_from = st.date_input("조회 시작일", value=date.today())
@@ -84,9 +76,12 @@ def vessel_monitoring_section():
         per_page = st.slider("한 번에 가져올 건수", 1, 1000, 100)
 
     if st.button("🔍 조회", key="vessel_btn"):
-        if not api_key:
+        if not api_key_raw:
             st.error("먼저 서비스키를 입력해 주세요.")
             return
+
+        # URL-encoded 형태의 키를 디코딩
+        api_key = unquote(api_key_raw)
 
         BASE_URL = (
             "https://api.odcloud.kr/api/15128156/v1/"
@@ -135,19 +130,12 @@ tab_news, tab_hist, tab_vid, tab_vessel = st.tabs(
 
 with tab_news:
     st.subheader("▶ 구글 뉴스 크롤링 (RSS)")
-    keyword = st.text_input("검색 키워드", value="ESG", key="kw_input")
-    num     = st.slider("가져올 기사 개수", 5, 20, 10, key="num_slider")
+    kw  = st.text_input("검색 키워드", value="ESG", key="kw_input")
+    num = st.slider("가져올 기사 개수", 5, 20, 10, key="num_slider")
     if st.button("최신 뉴스 보기", key="news_btn"):
-        with st.spinner(f"‘{keyword}’ 뉴스 불러오는 중…"):
-            news_items = fetch_google_news(keyword, num)
-        if news_items:
-            for item in news_items:
-                st.markdown(
-                    f"- **[{item['source']} · {item['date']}]** "
-                    f"[{item['title']}]({item['link']})"
-                )
-        else:
-            st.warning("뉴스를 찾을 수 없습니다.")
+        with st.spinner(f"‘{kw}’ 뉴스 불러오는 중…"):
+            for item in fetch_google_news(kw, num):
+                st.markdown(f"- **[{item['source']} · {item['date']}]** [{item['title']}]({item['link']})")
 
 with tab_hist:
     sample_data_section()
