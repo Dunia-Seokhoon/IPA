@@ -173,33 +173,37 @@ def today_weather_section():
         c4.metric("💧 습도(%)", humidity if humidity is not None else "–")
         st.markdown(f"**날씨 상태:** {desc}")
 # ────────────────── 6) LLM 테스트 (Hugging Face Inference API) ──────────────────) LLM 테스트 (Hugging Face) ──────────────────
-@st.cache_resource
-def generate_with_hf(prompt: str) -> str:
-    if not HF_API_TOKEN:
-        return "⚠️ HF_API_TOKEN 환경변수가 설정되지 않았습니다."
-    headers = {"Authorization": f"Bearer {HF_API_TOKEN}", "Content-Type": "application/json"}
-    payload = {"inputs": prompt, "parameters": {"max_new_tokens": 256}}
-    try:
-        r = requests.post(HF_API_URL, headers=headers, json=payload, timeout=30)
-        r.raise_for_status()
-        data = r.json()
-        if isinstance(data, dict) and "generated_text" in data:
-            return data["generated_text"]
-        if isinstance(data, list) and data and "generated_text" in data[0]:
-            return data[0]["generated_text"]
-        return str(data)
-    except Exception as e:
-        return f"HF 호출 오류: {e}"
+# ⚙️ 환경변수로부터 토큰 가져오기
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+
+@st.cache_resource(show_spinner=False)
+def get_kanana_pipeline():
+    # Hugging Face 허브에서 권한이 필요한 모델 불러오기
+    return pipeline(
+        "text-generation",
+        model="kakaocorp/kanana-nano-2.1b-instruct",
+        # CPU만 쓸 땐 아래 옵션을 빼셔도 되고, GPU가 있으면 device_map="auto"를 써 보세요
+        torch_dtype="auto",
+        use_auth_token=HF_API_TOKEN,
+        trust_remote_code=True,
+        max_new_tokens=150,
+        temperature=0.7
+    )
 
 def llm_section():
-    st.subheader("🤖 LLM 테스트 (Hugging Face Inference API)")
-    prompt = st.text_area("프롬프트 입력", height=150, key="llm_prompt")
-    if st.button("생성", key="hf_generate"):
-        with st.spinner("API 호출 중…"):
-            out = generate_with_hf(prompt)
+    st.subheader("🤖 카나나 Nano (Transformers) 테스트")
+    prompt = st.text_area("프롬프트 입력", height=150)
+    if st.button("생성"):
+        if not HF_API_TOKEN:
+            st.error("⚠️ HF_API_TOKEN이 설정되지 않았습니다.")
+            return
+        with st.spinner("모델 로딩 및 생성 중… (시간이 좀 걸릴 수 있습니다)"):
+            pipe = get_kanana_pipeline()
+            outputs = pipe(prompt)
+            # outputs 는 list of dict
+            text = outputs[0].get("generated_text", "")
         st.markdown("### 응답")
-        st.write(out)
-    st.info("⚙️ 사용 전 HF_API_TOKEN과 HF_API_URL을 Secrets에 설정해주세요.")
+        st.write(text)
 
 # ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
