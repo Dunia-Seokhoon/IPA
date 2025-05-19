@@ -11,7 +11,7 @@ API_KEY = os.getenv("ODCLOUD_API_KEY", "GprdI3W07y8Ul7R0KwyRE0Beb1Y2wqtlBuvzWRqL
 
 # Hugging Face Inference API 설정
 HF_API_TOKEN = os.getenv("HF_API_TOKEN", "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")
-HF_API_URL   = os.getenv("HF_API_URL", "https://api-inference.huggingface.co/models/gpt2")
+HF_API_URL   = os.getenv("HF_API_URL", "https://huggingface.co/kakaocorp/kanana-nano-2.1b-instruct")
 
 # ────────────────── 1) 뉴스 크롤러 (Google News RSS) ──────────────────
 @st.cache_data(ttl=300)
