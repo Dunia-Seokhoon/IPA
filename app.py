@@ -303,22 +303,24 @@ def chatgpt_clone_section():
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
 
-    # ③ 사용자 입력
-    prompt = st.chat_input("메시지를 입력하세요")
+    # ③ 사용자 입력 (고유 key 지정)
+    prompt = st.chat_input("메시지를 입력하세요", key="gpt_clone_input")
     if not prompt:
         return
 
+    # ④ 유저 메시지 기록 및 렌더링
     st.session_state.gpt_messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # ④ OpenAI 대화 완성(스트리밍)
+    # ⑤ OpenAI 대화 완성(스트리밍)
     try:
         resp = openai.ChatCompletion.create(
             model="gpt-4o-mini",              # 필요시 gpt-3.5-turbo 로 변경
             messages=st.session_state.gpt_messages,
             stream=True
         )
+
         assistant_buf = ""
         with st.chat_message("assistant"):
             placeholder = st.empty()
@@ -328,9 +330,12 @@ def chatgpt_clone_section():
                     assistant_buf += delta["content"]
                     placeholder.markdown(assistant_buf + "▌")
             placeholder.markdown(assistant_buf)
+
+        # ⑥ 어시스턴트 메시지 기록
         st.session_state.gpt_messages.append(
             {"role": "assistant", "content": assistant_buf}
         )
+
     except Exception as e:
         st.error(f"OpenAI 호출 오류: {e}")
 
