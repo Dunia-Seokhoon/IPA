@@ -7,12 +7,12 @@ import requests
 from datetime import datetime, date
 from urllib.parse import urlencode, quote_plus
 
-# API 키들
-API_KEY       = os.getenv("ODCLOUD_API_KEY")
-HF_API_TOKEN  = os.getenv("HF_API_TOKEN")
-HF_API_URL    = os.getenv("HF_API_URL")
+# API 키들 (모두 Secrets 또는 환경변수에서 불러옵니다)
+API_KEY      = os.getenv("ODCLOUD_API_KEY")
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+HF_API_URL   = os.getenv("HF_API_URL")
 
-# ─── 1) 뉴스 크롤러 ─────────────────────────────────────────────
+# ────────────────── 1) 뉴스 크롤러 (Google News RSS) ──────────────────
 @st.cache_data(ttl=300)
 def fetch_google_news(keyword: str, max_items: int = 10):
     clean_kw = " ".join(keyword.strip().split())
@@ -31,7 +31,7 @@ def fetch_google_news(keyword: str, max_items: int = 10):
         })
     return items
 
-# ─── 2) CSV 히스토그램 ─────────────────────────────────────────
+# ────────────────── 2) CSV 히스토그램 섹션 ──────────────────
 def sample_data_section():
     st.subheader("📊 샘플 데이터 히스토그램")
     uploaded_file = st.file_uploader("CSV 파일 업로드 (optional)", type=["csv"])
@@ -49,7 +49,7 @@ def sample_data_section():
     else:
         st.info("CSV 파일을 올리면 히스토그램을 볼 수 있습니다.")
 
-# ─── 3) 동영상 업로드·재생 ───────────────────────────────────────
+# ────────────────── 3) 동영상 업로드·재생 섹션 ──────────────────
 def video_upload_section():
     st.subheader("📹 동영상 업로드 & 재생")
     video_file = st.file_uploader("동영상 파일 업로드", type=["mp4","mov","avi"])
@@ -58,13 +58,13 @@ def video_upload_section():
     else:
         st.info("파일을 선택해 주세요.")
 
-# ─── 4) 선박 관제정보 조회 ───────────────────────────────────────
+# ────────────────── 4) 선박 관제정보 조회 섹션 ──────────────────
 def vessel_monitoring_section():
-    st.subheader("🚢 선박 관제정보 조회")
+    st.subheader("🚢 해양수산부 선박 관제정보 조회")
     date_from = st.date_input("조회 시작일", date.today())
     date_to   = st.date_input("조회 종료일", date.today())
     page      = st.number_input("페이지 번호", 1, 1000, 1)
-    per_page  = st.slider("가져올 건수", 1, 1000, 100)
+    per_page  = st.slider("한 번에 가져올 건수", 1, 1000, 100)
     if st.button("🔍 조회"):
         params = {
             "serviceKey": API_KEY,
@@ -89,7 +89,7 @@ def vessel_monitoring_section():
         else:
             st.warning("조회된 데이터가 없습니다.")
 
-# ─── 5) 오늘의 날씨 조회 ─────────────────────────────────────────
+# ────────────────── 5) 오늘의 날씨 섹션 ──────────────────
 def today_weather_section():
     st.subheader("☀️ 오늘의 날씨 조회")
     city_name = st.text_input("도시 이름 입력 (예: 서울, Busan)")
@@ -98,7 +98,7 @@ def today_weather_section():
             st.warning("도시 이름을 입력해 주세요.")
             return
 
-        q_name = quote_plus(city_name)
+        q_name  = quote_plus(city_name)
         geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={q_name}&count=5&language=ko"
         with st.spinner("위치 검색 중…"):
             geo_res = requests.get(geo_url)
@@ -110,8 +110,9 @@ def today_weather_section():
             st.warning("도시를 찾을 수 없습니다.")
             return
 
-        loc = results[0]
-        lat, lon = loc["latitude"], loc["longitude"]
+        loc  = results[0]
+        lat  = loc["latitude"]
+        lon  = loc["longitude"]
         display_name = f"{loc['name']}, {loc['country']}"
 
         weather_url = (
@@ -125,8 +126,8 @@ def today_weather_section():
             st.error("날씨 API 오류")
             return
 
-        js = w_res.json()
-        cw = js.get("current_weather", {})
+        js   = w_res.json()
+        cw   = js.get("current_weather", {})
         temp, wind_spd, wind_dir, code = (
             cw.get("temperature"),
             cw.get("windspeed"),
@@ -141,11 +142,11 @@ def today_weather_section():
             80:"소나기 약함",81:"소나기 보통",82:"소나기 강함",
             95:"뇌우",96:"약한 뇌우",99:"강한 뇌우"
         }
-        desc = wc_map.get(code, "알 수 없음")
-        times = js["hourly"]["time"]
-        hums  = js["hourly"]["relativehumidity_2m"]
-        now   = datetime.now().strftime("%Y-%m-%dT%H:00")
-        humidity = hums[times.index(now)] if now in times else None
+        desc      = wc_map.get(code, "알 수 없음")
+        times     = js["hourly"]["time"]
+        hums      = js["hourly"]["relativehumidity_2m"]
+        now       = datetime.now().strftime("%Y-%m-%dT%H:00")
+        humidity  = hums[times.index(now)] if now in times else None
 
         st.markdown(f"### {display_name} 현재 날씨")
         c1, c2, c3, c4 = st.columns(4)
@@ -153,17 +154,17 @@ def today_weather_section():
         c2.metric("💨 풍속(m/s)", wind_spd)
         c3.metric("🌫️ 풍향(°)", wind_dir)
         c4.metric("💧 습도(%)", humidity or "–")
-        st.write(f"**날씨 상태:** {desc}")
+        st.markdown(f"**날씨 상태:** {desc}")
 
-# ─── 6) LLM 테스트 ───────────────────────────────────────────────
+# ────────────────── 6) LLM 테스트 (Hugging Face Inference API) ──────────────────
 def generate_with_kanana(prompt: str) -> str:
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     payload = {
-        "inputs": prompt,
-        "options": {"use_cache": False},
+        "inputs":     prompt,
+        "options":    {"use_cache": False},
         "parameters": {"max_new_tokens": 150, "temperature": 0.7}
     }
-    res = requests.post(HF_API_URL, headers=headers, json=payload)
+    res = requests.post(HF_API_URL, headers=headers, json=payload, timeout=30)
     res.raise_for_status()
     return res.json()[0]["generated_text"]
 
@@ -182,7 +183,7 @@ def llm_section():
             except Exception as e:
                 st.error(f"LLM 호출 오류: {e}")
 
-# ─── 7) 앱 레이아웃 ─────────────────────────────────────────────
+# ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
 st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM")
 
@@ -207,6 +208,7 @@ with tabs[4]:
     today_weather_section()
 with tabs[5]:
     llm_section()
+
 
 
 
