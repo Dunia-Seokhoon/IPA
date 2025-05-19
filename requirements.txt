@@ -13,7 +13,13 @@ pypdf
 tiktoken
 openai>=1.13.3
 python-dotenv
+
+# ── LlamaIndex core & 플러그인 ───────────
 llama-index-core
-llama-index-embeddings-openai
 llama-index-llms-openai
-text<br>llama-index-readers-file<br>pymupdf<br>pdfminer.six<br>
+llama-index-embeddings-openai
+llama-index-readers-file       # ← PDF/Word/PPTX
+
+# ── PDF 파서 ────────────────────────────
+pdfminer.six
+pymupdf         # (= PyMuPDF, 빠른 PDF 파서)
