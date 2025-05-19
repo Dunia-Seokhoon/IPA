@@ -14,7 +14,14 @@ from llama_index.core import (
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 import logging, traceback
-import openai    # ← NEW
+import openai                             # ← NEW
+
+# ★ LangChain + 벡터DB -------------------------------------------
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI          # ★
+from langchain_community.vectorstores.faiss import FAISS          # ★
+from langchain.docstore.document import Document                  # ★
+# -----------------------------------------------------------------
+
 openai.api_key = (
     st.secrets.get("OPENAI_API_KEY")         # .streamlit/secrets.toml
     or os.getenv("OPENAI_API_KEY", "")       # 환경변수
@@ -340,9 +347,8 @@ st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM"
 
 tabs = st.tabs([
     "구글 뉴스", "데이터 히스토그램", "동영상 재생",
-    "선박 관제정보", "오늘의 날씨", "LLM 테스트",
-    "문서 챗봇",         # 기존
-    "ChatGPT 클론"       # ← NEW
+    "선박 관제정보", "오늘의 날씨", "LLM 테스트", "ChatGPT 클론", "문서 챗봇"
+   
 ])
 with tabs[0]:
     st.subheader("▶ 구글 뉴스 크롤링 (RSS)")
