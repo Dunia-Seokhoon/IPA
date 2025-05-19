@@ -6,7 +6,7 @@ import feedparser
 import requests
 from datetime import datetime, date
 from urllib.parse import urlencode
-API_KEY = os.getenv("ODCLOUD_API_KEY")
+API_KEY = os.getenv("GprdI3W07y8Ul7R0KwyRE0Beb1Y2wqtlBuvzWRqLqIZzEkR7xrPePc6CMQeD9FQAsTyQHh1V8NDK1md4ou4WGw==")
 
 # Hugging Face Inference API 설정
 HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
@@ -90,43 +90,60 @@ def vessel_monitoring_section():
         else:
             st.warning("조회된 데이터가 없습니다.")
 
-# ────────────────── 5) 오늘의 날씨 섹션 ──────────────────
+# ────────────────── 5) 오늘의 날씨 섹션 (동적 도시 검색) ──────────────────
 def today_weather_section():
     st.subheader("☀️ 오늘의 날씨 조회")
-    city = st.selectbox(
-        "도시 선택",
-        ["Seoul", "Busan", "Incheon"],
-        format_func=lambda x: {"Seoul":"서울","Busan":"부산","Incheon":"인천"}[x],
-        key="weather_city"
-    )
+    city_name = st.text_input("도시 이름 입력 (예: Seoul, Busan, Incheon)", key="weather_city_input")
     if st.button("🔍 날씨 가져오기", key="weather_search"):
-        coords = {"Seoul":(37.5665,126.9780),"Busan":(35.1796,129.0756),"Incheon":(37.4563,126.7052)}
-        lat, lon = coords[city]
+        if not city_name:
+            st.warning("도시 이름을 입력해 주세요.")
+            return
+        # 지오코딩 API 호출 (Open-Meteo의 Geocoding)
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=5"
+        with st.spinner("위치 정보 검색 중…"):
+            geo_res = requests.get(geo_url)
+        if geo_res.status_code != 200:
+            st.error("지오코딩 API 호출 실패")
+            return
+        geo_data = geo_res.json().get("results")
+        if not geo_data:
+            st.warning("해당 도시를 찾을 수 없습니다.")
+            return
+        # 다중 결과 처리: 첫 번째 사용
+        loc = geo_data[0]
+        lat, lon, display_name = loc.get("latitude"), loc.get("longitude"), f"{loc.get('name')}, {loc.get('country')}"
+        # 날씨 정보 조회
         url = (
             f"https://api.open-meteo.com/v1/forecast?"
             f"latitude={lat}&longitude={lon}&current_weather=true"
-            f"&hourly=relativehumidity_2m&timezone=Asia/Seoul"
+            f"&hourly=relativehumidity_2m&timezone=auto"
         )
-        with st.spinner(f"{city} 날씨 불러오는 중…"):
+        with st.spinner(f"{display_name} 날씨 불러오는 중…"):
             w_res = requests.get(url)
-            w_res.raise_for_status()
-            js = w_res.json()
+        if w_res.status_code != 200:
+            st.error("날씨 API 호출 실패")
+            return
+        js = w_res.json()
         cw = js.get("current_weather", {})
         temp, wind_spd, wind_dir, code = (
-            cw.get("temperature"), cw.get("windspeed"),
-            cw.get("winddirection"), cw.get("weathercode")
+            cw.get("temperature"), cw.get("windspeed"), cw.get("winddirection"), cw.get("weathercode")
         )
-        wc_map = {0:"맑음",1:"주로 맑음",2:"부분적 구름",3:"구름 많음",
-                  45:"안개",48:"안개(입상)",
-                  51:"이슬비 약함",53:"이슬비 보통",55:"이슬비 강함",
-                  61:"빗방울 약함",63:"빗방울 보통",65:"빗방울 강함",
-                  80:"소나기 약함",81:"소나기 보통",82:"소나기 강함",
-                  95:"뇌우",96:"약한 뇌우",99:"강한 뇌우"}
+        # 날씨 코드 매핑
+        wc_map = {
+            0:"맑음",1:"주로 맑음",2:"부분적 구름",3:"구름 많음",
+            45:"안개",48:"안개(입상)",
+            51:"이슬비 약함",53:"이슬비 보통",55:"이슬비 강함",
+            61:"빗방울 약함",63:"빗방울 보통",65:"빗방울 강함",
+            80:"소나기 약함",81:"소나기 보통",82:"소나기 강함",
+            95:"뇌우",96:"약한 뇌우",99:"강한 뇌우"
+        }
         desc = wc_map.get(code, "알 수 없음")
-        times, hums = js["hourly"]["time"], js["hourly"]["relativehumidity_2m"]
+        # 습도 얻기
+        times, hums = js.get("hourly", {}).get("time", []), js.get("hourly", {}).get("relativehumidity_2m", [])
         now = datetime.now().strftime("%Y-%m-%dT%H:00")
         humidity = hums[times.index(now)] if now in times else None
-        st.markdown(f"### {city} 현재 날씨")
+        # 결과 출력
+        st.markdown(f"### {display_name} 현재 날씨")
         c1,c2,c3,c4 = st.columns(4)
         c1.metric("🌡️ 기온(℃)", temp)
         c2.metric("💨 풍속(m/s)", wind_spd)
@@ -134,7 +151,7 @@ def today_weather_section():
         c4.metric("💧 습도(%)", humidity if humidity is not None else "–")
         st.markdown(f"**날씨 상태:** {desc}")
 
-# ────────────────── 6) LLM 테스트 (Hugging Face) ──────────────────
+# ────────────────── 6) LLM 테스트 (Hugging Face Inference API) ──────────────────) LLM 테스트 (Hugging Face) ──────────────────
 @st.cache_resource
 def generate_with_hf(prompt: str) -> str:
     if not HF_API_TOKEN:
