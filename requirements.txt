@@ -1,12 +1,13 @@
+
 streamlit
 pandas
 matplotlib
 feedparser
 requests
-langchain-community>=0.2.0
-langchain-huggingface
+langchain-community>=0.2.0   # 핵심
 huggingface-hub
-sentence-transformers      # MiniLM 임베딩
+langchain-huggingface
+sentence-transformers         # MiniLM 임베딩
+faiss-cpu                     # or faiss-gpu
 pypdf
-faiss-cpu                  # GPU 없으면 cpu
 tiktoken
