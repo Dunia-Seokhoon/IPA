@@ -7,7 +7,7 @@ import requests
 from datetime import datetime, date
 from urllib.parse import urlencode
 
-# ──────────────── 여기서부터 API 키를 하드코딩 ────────────────
+# ──────────────── 하드코딩된 API 키 ────────────────
 API_KEY = "GprdI3W07y8Ul7R0KwyRE0Beb1Y2wqtlBuvzWRqLqIZzEkR7xrPePc6CMQeD9FQAsTyQHh1V8NDK1md4ou4WGw=="
 
 # ────────────────── 1) 뉴스 크롤러 (Google News RSS) ──────────────────
@@ -36,7 +36,7 @@ def sample_data_section():
     uploaded_file = st.file_uploader("CSV 파일 업로드 (optional)", type=["csv"])
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
-        st.write(df)
+        st.dataframe(df)
         nums = df.select_dtypes(include="number").columns.tolist()
         if nums:
             col = st.selectbox("Numeric 컬럼 선택", nums)
@@ -110,58 +110,97 @@ def vessel_monitoring_section():
 # ────────────────── 5) 오늘의 날씨 섹션 ──────────────────
 def today_weather_section():
     st.subheader("☀️ 오늘의 날씨 조회")
-    city = st.text_input("도시 이름을 입력하세요", value="Seoul")
+
+    city = st.selectbox(
+        "도시 선택",
+        ["Seoul", "Busan", "Incheon"],
+        format_func=lambda x: {"Seoul":"서울","Busan":"부산","Incheon":"인천"}[x]
+    )
+
     if st.button("🔍 날씨 가져오기", key="weather_btn"):
         coords = {
             "Seoul":   (37.5665, 126.9780),
             "Busan":   (35.1796, 129.0756),
             "Incheon": (37.4563, 126.7052),
         }
-        lat, lon = coords.get(city, coords["Seoul"])
+        lat, lon = coords[city]
+
         url = (
             f"https://api.open-meteo.com/v1/forecast?"
             f"latitude={lat}&longitude={lon}"
-            f"&current_weather=true&timezone=Asia/Seoul"
+            f"&current_weather=true"
+            f"&hourly=relativehumidity_2m"
+            f"&timezone=Asia/Seoul"
         )
         with st.spinner(f"{city} 날씨 불러오는 중…"):
-            resp = requests.get(url)
-            resp.raise_for_status()
-            w = resp.json()["current_weather"]
+            res = requests.get(url)
+            res.raise_for_status()
+            js = res.json()
 
-        st.markdown(f"### {city}의 현재 날씨")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("🌡️ 기온(℃)", w["temperature"])
-        c2.metric("💨 풍속(m/s)", w["windspeed"])
-        c3.metric("🌫️ 풍향(°)", w["winddirection"])
+        # 현재 기상 정보
+        cw = js.get("current_weather", {})
+        temp     = cw.get("temperature")
+        wind_spd = cw.get("windspeed")
+        wind_dir = cw.get("winddirection")
+        code     = cw.get("weathercode")
+
+        # 날씨코드 -> 텍스트
+        wc_map = {
+            0: "맑음", 1: "주로 맑음", 2: "부분적 구름", 3: "구름 많음",
+            45: "안개", 48: "안개(입상)",
+            51: "이슬비 약함", 53: "이슬비 보통", 55: "이슬비 강함",
+            61: "빗방울 약함", 63: "빗방울 보통", 65: "빗방울 강함",
+            80: "소나기 약함", 81: "소나기 보통", 82: "소나기 강함",
+            95: "뇌우", 96: "약한 뇌우", 99: "강한 뇌우"
+        }
+        weather_desc = wc_map.get(code, "알 수 없음")
+
+        # 현재 습도
+        times = js["hourly"]["time"]
+        hums  = js["hourly"]["relativehumidity_2m"]
+        now_str = datetime.now().strftime("%Y-%m-%dT%H:00")
+        humidity = None
+        if now_str in times:
+            idx = times.index(now_str)
+            humidity = hums[idx]
+
+        # 출력
+        st.markdown(f"### {city} 현재 날씨")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("🌡️ 기온(℃)", temp)
+        c2.metric("💨 풍속(m/s)", wind_spd)
+        c3.metric("🌫️ 풍향(°)", wind_dir)
+        c4.metric("💧 습도(%)", humidity if humidity is not None else "–")
+
+        st.markdown(f"**날씨 상태:** {weather_desc}")
 
 # ────────────────── 6) 앱 레이아웃 (탭 구성) ──────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
-st.title("📈 통합 데모: 구글 뉴스 · 데이터 · 동영상 · 선박 · 날씨")
+st.title("📈 통합 데모: 뉴스 · 데이터 · 동영상 · 선박 · 날씨")
 
-tab_news, tab_hist, tab_vid, tab_vessel, tab_weather = st.tabs(
-    ["구글 뉴스", "데이터 히스토그램", "동영상 재생", "선박 관제정보", "오늘의 날씨"]
-)
+tabs = st.tabs([
+    "구글 뉴스", "데이터 히스토그램", "동영상 재생",
+    "선박 관제정보", "오늘의 날씨"
+])
 
-with tab_news:
+with tabs[0]:
     st.subheader("▶ 구글 뉴스 크롤링 (RSS)")
-    kw  = st.text_input("검색 키워드", value="ESG", key="kw_input")
+    kw  = st.text_input("검색 키워드", "ESG", key="kw_input")
     num = st.slider("가져올 기사 개수", 5, 20, 10, key="num_slider")
-    if st.button("최신 뉴스 보기", key="news_btn"):
+    if st.button("보기", key="news_btn"):
         with st.spinner(f"‘{kw}’ 뉴스 불러오는 중…"):
-            for item in fetch_google_news(kw, num):
-                st.markdown(
-                    f"- **[{item['source']} · {item['date']}]** "
-                    f"[{item['title']}]({item['link']})"
-                )
+            for it in fetch_google_news(kw, num):
+                st.markdown(f"- **[{it['source']} · {it['date']}]** [{it['title']}]({it['link']})")
 
-with tab_hist:
+with tabs[1]:
     sample_data_section()
 
-with tab_vid:
+with tabs[2]:
     video_upload_section()
 
-with tab_vessel:
+with tabs[3]:
     vessel_monitoring_section()
 
-with tab_weather:
+with tabs[4]:
     today_weather_section()
+
