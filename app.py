@@ -15,13 +15,6 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 import logging, traceback
 import openai                             # ← NEW
-
-# ★ LangChain + 벡터DB -------------------------------------------
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI          # ★
-from langchain_community.vectorstores.faiss import FAISS          # ★
-from langchain.docstore.document import Document                  # ★
-# -----------------------------------------------------------------
-
 openai.api_key = (
     st.secrets.get("OPENAI_API_KEY")         # .streamlit/secrets.toml
     or os.getenv("OPENAI_API_KEY", "")       # 환경변수
