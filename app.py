@@ -323,15 +323,17 @@ def chatgpt_clone_section():
             stream=True
         )
 
-        assistant_buf = ""
-        with st.chat_message("assistant"):
-            placeholder = st.empty()
-            for chunk in resp:
-                delta = chunk["choices"][0].get("delta", {})
-                if "content" in delta:
-                    assistant_buf += delta["content"]
-                    placeholder.markdown(assistant_buf + "▌")
-            placeholder.markdown(assistant_buf)
+    assistant_buf = ""
+    with st.chat_message("assistant"):
+        placeholder = st.empty()
+        for chunk in resp:
+            # ChatCompletionChunk 객체의 choices 속성에 접근합니다.
+            choice = chunk.choices[0]              # 리스트 안의 첫 번째 Choice 객체
+            delta  = choice.delta                 # 그 안의 delta 객체
+            if delta.content:                     # content 속성이 있는지 체크
+                assistant_buf += delta.content
+                placeholder.markdown(assistant_buf + "▌")
+        placeholder.markdown(assistant_buf)
 
         # ⑥ 어시스턴트 메시지 기록
         st.session_state.gpt_messages.append(
