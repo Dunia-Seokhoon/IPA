@@ -14,6 +14,7 @@ from llama_index.core import (
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 import logging, traceback
+from openai import OpenAI
 
 # API 키들 (모두 Secrets 또는 환경변수에서 불러옵니다)
 API_KEY      = os.getenv("ODCLOUD_API_KEY")
