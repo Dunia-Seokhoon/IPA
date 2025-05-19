@@ -1,4 +1,3 @@
-# app.py  |  Streamlit 통합 데모
 import os
 import streamlit as st
 import pandas as pd
@@ -6,12 +5,16 @@ import matplotlib.pyplot as plt
 import feedparser
 import requests
 from datetime import datetime, date
-from urllib.parse import urlencode, quote_plus
+from urllib.parse import urlencode
+from dotenv import load_dotenv
 
-# ──────────────── 환경변수 및 하드코딩된 API 키 ────────────────
-API_KEY = os.getenv("ODCLOUD_API_KEY", "GprdI3W07y8Ul7R0KwyRE0Beb1Y2wqtlBuvzWRqLqIZzEkR7xrPePc6CMQeD9FQAsTyQHh1V8NDK1md4ou4WGw==")
-OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "https://api.ollama.cloud/v1/completions")
-OLLAMA_API_KEY  = os.getenv("OLLAMA_API_KEY", "sk-XXXXXXXXXXXXXXXXXXXXXXXX")
+# 환경변수 로드
+load_dotenv()
+API_KEY = os.getenv("ODCLOUD_API_KEY")
+
+# Hugging Face Inference API 설정
+HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
+HF_API_URL   = os.getenv("HF_API_URL", "https://api-inference.huggingface.co/models/gpt2")
 
 # ────────────────── 1) 뉴스 크롤러 (Google News RSS) ──────────────────
 @st.cache_data(ttl=300)
@@ -94,7 +97,6 @@ def vessel_monitoring_section():
 # ────────────────── 5) 오늘의 날씨 섹션 ──────────────────
 def today_weather_section():
     st.subheader("☀️ 오늘의 날씨 조회")
-    # 선택형 도시 목록
     city = st.selectbox(
         "도시 선택",
         ["Seoul", "Busan", "Incheon"],
@@ -136,36 +138,47 @@ def today_weather_section():
         c4.metric("💧 습도(%)", humidity if humidity is not None else "–")
         st.markdown(f"**날씨 상태:** {desc}")
 
-# ────────────────── 6) LLM 테스트 (Ollama Cloud) ──────────────────
-def generate_with_ollama(prompt: str) -> str:
-    headers = {"Authorization":f"Bearer {OLLAMA_API_KEY}","Content-Type":"application/json"}
-    payload = {"model":"seokhoon/IPA","prompt":prompt,"temperature":0.7,"max_tokens":256}
-    r = requests.post(OLLAMA_ENDPOINT,json=payload,headers=headers)
-    if r.status_code != 200:
-        return f"LLM 오류 {r.status_code}: {r.text}"
-    return r.json().get("choices",[{}])[0].get("text","")
+# ────────────────── 6) LLM 테스트 (Hugging Face) ──────────────────
+@st.cache_resource
+def generate_with_hf(prompt: str) -> str:
+    if not HF_API_TOKEN:
+        return "⚠️ HF_API_TOKEN 환경변수가 설정되지 않았습니다."
+    headers = {"Authorization": f"Bearer {HF_API_TOKEN}", "Content-Type": "application/json"}
+    payload = {"inputs": prompt, "parameters": {"max_new_tokens": 256}}
+    try:
+        r = requests.post(HF_API_URL, headers=headers, json=payload, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, dict) and "generated_text" in data:
+            return data["generated_text"]
+        if isinstance(data, list) and data and "generated_text" in data[0]:
+            return data[0]["generated_text"]
+        return str(data)
+    except Exception as e:
+        return f"HF 호출 오류: {e}"
 
 def llm_section():
-    st.subheader("🤖 LLM 테스트 (Ollama Cloud)")
-    prompt = st.text_area("프롬프트 입력",height=150,key="llm_prompt")
-    if st.button("생성",key="llm_generate"):
-        with st.spinner("LLM 호출 중…"):
-            out = generate_with_ollama(prompt)
+    st.subheader("🤖 LLM 테스트 (Hugging Face Inference API)")
+    prompt = st.text_area("프롬프트 입력", height=150, key="llm_prompt")
+    if st.button("생성", key="hf_generate"):
+        with st.spinner("API 호출 중…"):
+            out = generate_with_hf(prompt)
         st.markdown("### 응답")
         st.write(out)
+    st.info("⚙️ 사용 전 HF_API_TOKEN과 HF_API_URL을 Secrets에 설정해주세요.")
 
 # ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
-st.set_page_config(page_title="통합 데모",layout="centered")
+st.set_page_config(page_title="통합 데모", layout="centered")
 st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM")
 
-tabs = st.tabs(["구글 뉴스","데이터 히스토그램","동영상 재생","선박 관제정보","오늘의 날씨","LLM 테스트"])
+tabs = st.tabs(["구글 뉴스", "데이터 히스토그램", "동영상 재생", "선박 관제정보", "오늘의 날씨", "LLM 테스트"])
 with tabs[0]:
     st.subheader("▶ 구글 뉴스 크롤링 (RSS)")
-    kw = st.text_input("검색 키워드","ESG",key="news_kw")
-    num = st.slider("가져올 기사 개수",5,20,10,key="news_num")
-    if st.button("보기",key="news_btn"):
+    kw = st.text_input("검색 키워드", "ESG", key="news_kw")
+    num = st.slider("가져올 기사 개수", 5, 20, 10, key="news_num")
+    if st.button("보기", key="news_btn"):
         with st.spinner(f"‘{kw}’ 뉴스 로딩…"):
-            for it in fetch_google_news(kw,num):
+            for it in fetch_google_news(kw, num):
                 st.markdown(f"- **[{it['source']} · {it['date']}]** [{it['title']}]({it['link']})")
 with tabs[1]:
     sample_data_section()
@@ -177,5 +190,6 @@ with tabs[4]:
     today_weather_section()
 with tabs[5]:
     llm_section()
+
 
 
