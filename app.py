@@ -157,7 +157,9 @@ def today_weather_section():
         st.markdown(f"**날씨 상태:** {desc}")
 
 # ────────────────── 6) LLM 테스트 (Hugging Face Inference API) ──────────────────
-def generate_with_kanana(prompt: str) -> str:
+# ────────────────── 6) LLM 테스트 (Hugging Face Inference API) ──────────────────
+
+def generate_with_gpt2(prompt: str) -> str:
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     payload = {
         "inputs":     prompt,
@@ -166,10 +168,11 @@ def generate_with_kanana(prompt: str) -> str:
     }
     res = requests.post(HF_API_URL, headers=headers, json=payload, timeout=30)
     res.raise_for_status()
-    return res.json()[0]["generated_text"]
+    # openai-community/gpt2 역시 [{"generated_text": "..."}] 형태로 응답합니다.
+    return res.json()[0].get("generated_text", "")
 
 def llm_section():
-    st.subheader("🤖 카나나 Nano (Hugging Face Inference API)")
+    st.subheader("🤖 GPT-2 테스트 (Hugging Face Inference API)")
     prompt = st.text_area("프롬프트 입력", height=150)
     if st.button("생성"):
         if not HF_API_TOKEN or not HF_API_URL:
@@ -177,7 +180,7 @@ def llm_section():
             return
         with st.spinner("응답 생성 중…"):
             try:
-                out = generate_with_kanana(prompt)
+                out = generate_with_gpt2(prompt)
                 st.markdown("### 응답")
                 st.write(out)
             except Exception as e:
