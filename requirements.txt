@@ -11,8 +11,9 @@ sentence-transformers         # MiniLM 임베딩
 faiss-cpu                     # or faiss-gpu
 pypdf
 tiktoken
-openai>=1.13.3
 python-dotenv
+
+openai>=1.14.0   # 1.x 버전 기준 (stream 매개변수 지원)
 
 # ── LlamaIndex core & 플러그인 ───────────
 llama-index-core
