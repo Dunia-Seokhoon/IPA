@@ -9,3 +9,7 @@ pandas
 matplotlib
 
 feedparser
+
+transformers
+
+torch      # CPU 모드라도 필요합니다
