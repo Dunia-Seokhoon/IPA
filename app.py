@@ -317,7 +317,7 @@ def chatgpt_clone_section():
 
     # ⑤ OpenAI 대화 완성(스트리밍)
     try:
-        resp = openai.ChatCompletion.create(
+        resp = openai.chat.completions.create(
             model="gpt-4o-mini",              # 필요시 gpt-3.5-turbo 로 변경
             messages=st.session_state.gpt_messages,
             stream=True
