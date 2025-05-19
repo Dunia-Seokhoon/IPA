@@ -1,4 +1,5 @@
 # app.py  |  Streamlit 통합 데모
+import os
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -110,6 +111,7 @@ def vessel_monitoring_section():
 # ────────────────── 5) 오늘의 날씨 섹션 (동적 도시 검색) ──────────────────
 def today_weather_section():
     st.subheader("☀️ 오늘의 날씨 조회")
+
     city = st.text_input("도시 이름을 입력하세요 (예: Seoul, 서울)", value="Seoul")
     if st.button("🔍 날씨 가져오기", key="weather_btn"):
         # 1) 지오코딩 API로 위경도 조회
@@ -131,7 +133,7 @@ def today_weather_section():
             return
         lat = results[0]["latitude"]
         lon = results[0]["longitude"]
-        city_name = results[0].get("name_local", results[0]["name"])  # 현지명
+        city_name = results[0].get("name_local", results[0]["name"])  
 
         # 2) 날씨 API 호출
         weather_url = (
@@ -152,7 +154,6 @@ def today_weather_section():
         wind_dir = cw.get("winddirection")
         code     = cw.get("weathercode")
 
-        # 날씨코드 텍스트 매핑
         wc_map = {
             0: "맑음", 1: "주로 맑음", 2: "부분적 구름", 3: "구름 많음",
             45: "안개", 48: "안개(입상)",
@@ -163,7 +164,6 @@ def today_weather_section():
         }
         weather_desc = wc_map.get(code, "알 수 없음")
 
-        # 습도 조회
         times = w_js["hourly"]["time"]
         hums  = w_js["hourly"]["relativehumidity_2m"]
         now_str = datetime.now().strftime("%Y-%m-%dT%H:00")
@@ -171,7 +171,6 @@ def today_weather_section():
         if now_str in times:
             humidity = hums[times.index(now_str)]
 
-        # 화면에 출력
         st.markdown(f"### {city_name} 현재 날씨")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("🌡️ 기온(℃)", temp)
@@ -180,13 +179,41 @@ def today_weather_section():
         c4.metric("💧 습도(%)", humidity if humidity is not None else "–")
         st.markdown(f"**날씨 상태:** {weather_desc}")
 
-# ────────────────── 6) 앱 레이아웃 (탭 구성) ──────────────────
+# ────────────────── 6) LLM 테스트 (Ollama Cloud) 섹션 ──────────────────
+OLLAMA_ENDPOINT = "https://api.ollama.cloud/v1/completions"
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "sk-XXXXXXXXXXXXXXXXXXXXXXXX")
+
+def generate_with_ollama(prompt: str) -> str:
+    headers = {
+        "Authorization": f"Bearer {OLLAMA_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": "seokhoon/IPA",
+        "prompt": prompt,
+        "temperature": 0.7,
+        "max_tokens": 256
+    }
+    r = requests.post(OLLAMA_ENDPOINT, json=payload, headers=headers)
+    r.raise_for_status()
+    return r.json()["choices"][0]["text"]
+
+def llm_section():
+    st.subheader("🤖 LLM 테스트 (Ollama Cloud)")
+    prompt = st.text_area("프롬프트 입력", height=150)
+    if st.button("생성", key="llm_btn"):
+        with st.spinner("생성 중…"):
+            out = generate_with_ollama(prompt)
+        st.markdown("### 응답")
+        st.write(out)
+
+# ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
-st.title("📈 통합 데모: 뉴스 · 데이터 · 동영상 · 선박 · 날씨")
+st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM")
 
 tabs = st.tabs([
     "구글 뉴스", "데이터 히스토그램", "동영상 재생",
-    "선박 관제정보", "오늘의 날씨"
+    "선박 관제정보", "오늘의 날씨", "LLM 테스트"
 ])
 
 with tabs[0]:
@@ -209,4 +236,7 @@ with tabs[3]:
 
 with tabs[4]:
     today_weather_section()
+
+with tabs[5]:
+    llm_section()
 
