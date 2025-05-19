@@ -11,10 +11,9 @@ import feedparser
 import requests
 
 # ───────────── LangChain × Hugging Face ─────────────
-from langchain_huggingface import (
-    ChatHuggingFace,
-    HuggingFaceHubEmbeddings,
-)
+# 변경
+from langchain_community.chat_models import ChatHuggingFace
+from langchain_community.embeddings import HuggingFaceHubEmbeddings
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
