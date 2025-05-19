@@ -93,59 +93,41 @@ def vessel_monitoring_section():
 # ────────────────── 5) 오늘의 날씨 섹션 (동적 도시 검색) ──────────────────
 def today_weather_section():
     st.subheader("☀️ 오늘의 날씨 조회")
-    city_name = st.text_input("도시 이름 입력 (예: 서울, Seoul, 부산, Busan)", key="weather_city_input")
+    city_name = st.text_input("도시 이름 입력 (예: 서울, Seoul, 부산, Busan)", key="weather_city_input")", key="weather_city_input")
     if st.button("🔍 날씨 가져오기", key="weather_search"):
         if not city_name:
             st.warning("도시 이름을 입력해 주세요.")
             return
-
-        # 한글·영어 모두 지원하도록 URL-encode
-        q_name = quote_plus(city_name)
-
-        # 한국어 결과 우선으로 language=ko 추가
-        geo_url = (
-            f"https://geocoding-api.open-meteo.com/v1/search?"
-            f"name={q_name}&count=5&language=ko"
-        )
+        # 지오코딩 API 호출 (Open-Meteo의 Geocoding)
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_name}&count=5"
         with st.spinner("위치 정보 검색 중…"):
             geo_res = requests.get(geo_url)
         if geo_res.status_code != 200:
             st.error("지오코딩 API 호출 실패")
             return
-
         geo_data = geo_res.json().get("results")
         if not geo_data:
             st.warning("해당 도시를 찾을 수 없습니다.")
             return
-
+        # 다중 결과 처리: 첫 번째 사용
         loc = geo_data[0]
-        lat  = loc["latitude"]
-        lon  = loc["longitude"]
-        display_name = f"{loc.get('name')}, {loc.get('country')}"
-
+        lat, lon, display_name = loc.get("latitude"), loc.get("longitude"), f"{loc.get('name')}, {loc.get('country')}"
         # 날씨 정보 조회
-        weather_url = (
+        url = (
             f"https://api.open-meteo.com/v1/forecast?"
-            f"latitude={lat}&longitude={lon}"
-            f"&current_weather=true"
-            f"&hourly=relativehumidity_2m"
-            f"&timezone=auto"
+            f"latitude={lat}&longitude={lon}&current_weather=true"
+            f"&hourly=relativehumidity_2m&timezone=auto"
         )
         with st.spinner(f"{display_name} 날씨 불러오는 중…"):
-            w_res = requests.get(weather_url)
+            w_res = requests.get(url)
         if w_res.status_code != 200:
             st.error("날씨 API 호출 실패")
             return
-
         js = w_res.json()
         cw = js.get("current_weather", {})
         temp, wind_spd, wind_dir, code = (
-            cw.get("temperature"),
-            cw.get("windspeed"),
-            cw.get("winddirection"),
-            cw.get("weathercode")
+            cw.get("temperature"), cw.get("windspeed"), cw.get("winddirection"), cw.get("weathercode")
         )
-
         # 날씨 코드 매핑
         wc_map = {
             0:"맑음",1:"주로 맑음",2:"부분적 구름",3:"구름 많음",
@@ -156,16 +138,13 @@ def today_weather_section():
             95:"뇌우",96:"약한 뇌우",99:"강한 뇌우"
         }
         desc = wc_map.get(code, "알 수 없음")
-
         # 습도 얻기
-        times = js.get("hourly", {}).get("time", [])
-        hums  = js.get("hourly", {}).get("relativehumidity_2m", [])
-        now   = datetime.now().strftime("%Y-%m-%dT%H:00")
+        times, hums = js.get("hourly", {}).get("time", []), js.get("hourly", {}).get("relativehumidity_2m", [])
+        now = datetime.now().strftime("%Y-%m-%dT%H:00")
         humidity = hums[times.index(now)] if now in times else None
-
         # 결과 출력
         st.markdown(f"### {display_name} 현재 날씨")
-        c1, c2, c3, c4 = st.columns(4)
+        c1,c2,c3,c4 = st.columns(4)
         c1.metric("🌡️ 기온(℃)", temp)
         c2.metric("💨 풍속(m/s)", wind_spd)
         c3.metric("🌫️ 풍향(°)", wind_dir)
