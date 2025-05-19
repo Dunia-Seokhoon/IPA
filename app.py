@@ -191,6 +191,101 @@ def llm_section():
             except Exception as e:
                 st.error(f"LLM 호출 오류: {e}")
 
+# ────────────────── 7) 문서 기반 챗봇 (LlamaIndex) ──────────────────
+def rag_chatbot_section():
+    st.subheader("📚 문서 기반 챗봇 (RAG with LlamaIndex)")
+
+    # ── 사이드바 (키‧파일 업로드) ――――――――――――――――――――――――――――――――――――――――――
+    with st.sidebar:
+        st.markdown("### 🔑 OpenAI API Key")
+        api_key = st.text_input("OPENAI_API_KEY",
+                                value=st.secrets.get("OPENAI_API_KEY", ""),
+                                type="password")
+        uploaded_file = st.file_uploader(
+            "📄 인덱싱할 문서 업로드",
+            type=["txt", "pdf", "md", "docx", "pptx", "csv"]
+        )
+
+    # ── 최초 준비 (세션 상태 & 디렉터리) ――――――――――――――――――――――――――――――――――――
+    if "rag_messages" not in st.session_state:
+        st.session_state.rag_messages = []
+    if "chat_engine" not in st.session_state:
+        st.session_state.chat_engine = None
+
+    os.makedirs("./cache/data", exist_ok=True)
+    os.makedirs("./storage",    exist_ok=True)
+
+    # ── 파일 업로드 시 로컬 보관  --------------------------
+    if uploaded_file is not None:
+        file_path = os.path.join("cache", "data", uploaded_file.name)
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        st.success(f"‘{uploaded_file.name}’ 업로드 완료!")
+
+    # ── LlamaIndex 세팅  -------------------------------
+    if api_key:
+        load_dotenv()                 # .env 병행 로드
+        Settings.llm = OpenAI(model="gpt-4o-mini", temperature=0, api_key=api_key)
+        Settings.embed_model = OpenAIEmbedding(model="text-embedding-3-small",
+                                               api_key=api_key)
+    else:
+        st.warning("🔑 OpenAI API Key를 입력해 주세요.")
+        st.stop()
+
+    # ── 인덱스 생성·로드 (캐시 활용) ――――――――――――――――――――――――――――
+    @st.cache_resource(show_spinner="🔧 인덱스 빌드 중…")
+    def load_or_build_index() -> VectorStoreIndex:
+        persist_dir = "./storage"
+        if os.listdir("cache/data"):              # 문서가 있으면
+            # 새 문서로 항상 재빌드
+            docs = SimpleDirectoryReader("cache/data").load_data()
+            idx  = VectorStoreIndex.from_documents(docs)
+            idx.storage_context.persist(persist_dir)
+            return idx
+        # 문서가 없고 기존 저장분이 있으면 로드
+        if os.path.exists(os.path.join(persist_dir, "docstore.json")):
+            sc  = StorageContext.from_defaults(persist_dir=persist_dir)
+            idx = load_index_from_storage(sc)
+            return idx
+        return None
+
+    index = load_or_build_index()
+    if index is None:
+        st.info("먼저 문서를 업로드하거나 storage 폴더에 기존 인덱스를 두세요.")
+        st.stop()
+
+    # ── ChatEngine 준비 (스트리밍) ―――――――――――――――――――――――――――――
+    if st.session_state.chat_engine is None:
+        st.session_state.chat_engine = index.as_chat_engine(
+            chat_mode="context",
+            similarity_top_k=4,
+            streaming=True
+        )
+
+    # ── 이전 대화 출력 -------------------------------
+    for msg in st.session_state.rag_messages:
+        st.chat_message(msg["role"]).markdown(msg["content"])
+
+    # ── 사용자 입력 & 응답 ----------------------------
+    user_input = st.chat_input("질문을 입력하세요.")
+    if user_input:
+        st.session_state.rag_messages.append({"role": "user", "content": user_input})
+        st.chat_message("user").markdown(user_input)
+
+        try:
+            with st.chat_message("assistant"):
+                stream_resp = st.session_state.chat_engine.stream_chat(user_input)
+                buffer = ""
+                for chunk in stream_resp.response_gen:
+                    buffer += chunk
+                    st.write(buffer + "▌")
+                st.session_state.rag_messages.append(
+                    {"role": "assistant", "content": buffer}
+                )
+        except Exception as e:
+            st.error(f"⚠️ 오류: {e}")
+            traceback.print_exc()
+
 # ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
 st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM")
