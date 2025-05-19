@@ -5,17 +5,14 @@ import matplotlib.pyplot as plt
 import feedparser
 import requests
 from datetime import datetime, date
-from urllib.parse import urlencode
-from urllib.parse import urlencode, quote_plus  # ← quote_plus 추가
-from transformers import pipeline
+from urllib.parse import urlencode, quote_plus
 
-API_KEY = os.getenv("ODCLOUD_API_KEY", "GprdI3W07y8Ul7R0KwyRE0Beb1Y2wqtlBuvzWRqLqIZzEkR7xrPePc6CMQeD9FQAsTyQHh1V8NDK1md4ou4WGw==")
+# API 키들
+API_KEY       = os.getenv("ODCLOUD_API_KEY")
+HF_API_TOKEN  = os.getenv("HF_API_TOKEN")
+HF_API_URL    = os.getenv("HF_API_URL")
 
-# Hugging Face Inference API 설정
-HF_API_TOKEN = os.getenv("HF_API_TOKEN", "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")
-HF_API_URL   = os.getenv("HF_API_URL", "https:////huggingface.co/kakaocorp/kanana-nano-2.1b-instruct")
-
-# ────────────────── 1) 뉴스 크롤러 (Google News RSS) ──────────────────
+# ─── 1) 뉴스 크롤러 ─────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def fetch_google_news(keyword: str, max_items: int = 10):
     clean_kw = " ".join(keyword.strip().split())
@@ -27,23 +24,23 @@ def fetch_google_news(keyword: str, max_items: int = 10):
         pub_date = datetime(*entry.published_parsed[:6]).strftime("%Y-%m-%d")
         source   = entry.get("source", {}).get("title", "")
         items.append({
-            "title": entry.title,
-            "link":  entry.link,
+            "title":  entry.title,
+            "link":   entry.link,
             "source": source,
             "date":   pub_date,
         })
     return items
 
-# ────────────────── 2) CSV 히스토그램 섹션 ──────────────────
+# ─── 2) CSV 히스토그램 ─────────────────────────────────────────
 def sample_data_section():
     st.subheader("📊 샘플 데이터 히스토그램")
-    uploaded_file = st.file_uploader("CSV 파일 업로드 (optional)", type=["csv"], key="hist_csv")
+    uploaded_file = st.file_uploader("CSV 파일 업로드 (optional)", type=["csv"])
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
         st.dataframe(df)
         nums = df.select_dtypes(include="number").columns.tolist()
         if nums:
-            col = st.selectbox("Numeric 컬럼 선택", nums, key="hist_col")
+            col = st.selectbox("Numeric 컬럼 선택", nums)
             fig, ax = plt.subplots()
             ax.hist(df[col], bins=10)
             ax.set_xlabel(col)
@@ -52,23 +49,23 @@ def sample_data_section():
     else:
         st.info("CSV 파일을 올리면 히스토그램을 볼 수 있습니다.")
 
-# ────────────────── 3) 동영상 업로드·재생 섹션 ──────────────────
+# ─── 3) 동영상 업로드·재생 ───────────────────────────────────────
 def video_upload_section():
     st.subheader("📹 동영상 업로드 & 재생")
-    video_file = st.file_uploader("동영상 파일 업로드 (MP4/MOV/AVI)", type=["mp4","mov","avi"], key="vid_file")
+    video_file = st.file_uploader("동영상 파일 업로드", type=["mp4","mov","avi"])
     if video_file:
         st.video(video_file)
     else:
         st.info("파일을 선택해 주세요.")
 
-# ────────────────── 4) 선박 관제정보 조회 섹션 ──────────────────
+# ─── 4) 선박 관제정보 조회 ───────────────────────────────────────
 def vessel_monitoring_section():
-    st.subheader("🚢 해양수산부 선박 관제정보 조회")
-    date_from = st.date_input("조회 시작일", date.today(), key="vessel_from")
-    date_to   = st.date_input("조회 종료일", date.today(), key="vessel_to")
-    page      = st.number_input("페이지 번호", 1, 1000, 1, key="vessel_page")
-    per_page  = st.slider("한 번에 가져올 건수", 1, 1000, 100, key="vessel_perpage")
-    if st.button("🔍 조회", key="vessel_search"):
+    st.subheader("🚢 선박 관제정보 조회")
+    date_from = st.date_input("조회 시작일", date.today())
+    date_to   = st.date_input("조회 종료일", date.today())
+    page      = st.number_input("페이지 번호", 1, 1000, 1)
+    per_page  = st.slider("가져올 건수", 1, 1000, 100)
+    if st.button("🔍 조회"):
         params = {
             "serviceKey": API_KEY,
             "page":       page,
@@ -81,62 +78,51 @@ def vessel_monitoring_section():
                 "https://api.odcloud.kr/api/15128156/v1/uddi:fdcdb0d1-0296-4c3b-8087-8ab4bd4d5123",
                 params=params
             )
-            if res.status_code != 200:
-                st.error(f"API 오류 {res.status_code}")
-                st.text(res.text)
-                return
-            data = res.json()
-        if data.get("data"):
-            df = pd.DataFrame(data["data"])
-            st.success(f"총 {data.get('totalCount', len(df))} 건 조회되었습니다.")
+        if res.status_code != 200:
+            st.error(f"API 오류 {res.status_code}")
+            return
+        data = res.json().get("data", [])
+        if data:
+            df = pd.DataFrame(data)
+            st.success(f"총 {len(df)} 건 조회되었습니다.")
             st.dataframe(df)
         else:
             st.warning("조회된 데이터가 없습니다.")
 
+# ─── 5) 오늘의 날씨 조회 ─────────────────────────────────────────
 def today_weather_section():
     st.subheader("☀️ 오늘의 날씨 조회")
-    city_name = st.text_input("도시 이름 입력 (예: 서울, Seoul, 부산, Busan)", key="weather_city_input")
-    if st.button("🔍 날씨 가져오기", key="weather_search"):
+    city_name = st.text_input("도시 이름 입력 (예: 서울, Busan)")
+    if st.button("🔍 날씨 가져오기"):
         if not city_name:
             st.warning("도시 이름을 입력해 주세요.")
             return
 
-        # 한글·영어 모두 지원하도록 URL-encode
         q_name = quote_plus(city_name)
-
-        # 한국어 결과 우선으로 language=ko 추가
-        geo_url = (
-            f"https://geocoding-api.open-meteo.com/v1/search?"
-            f"name={q_name}&count=5&language=ko"
-        )
-        with st.spinner("위치 정보 검색 중…"):
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={q_name}&count=5&language=ko"
+        with st.spinner("위치 검색 중…"):
             geo_res = requests.get(geo_url)
         if geo_res.status_code != 200:
-            st.error("지오코딩 API 호출 실패")
+            st.error("지오코딩 API 오류")
+            return
+        results = geo_res.json().get("results")
+        if not results:
+            st.warning("도시를 찾을 수 없습니다.")
             return
 
-        geo_data = geo_res.json().get("results")
-        if not geo_data:
-            st.warning("해당 도시를 찾을 수 없습니다.")
-            return
+        loc = results[0]
+        lat, lon = loc["latitude"], loc["longitude"]
+        display_name = f"{loc['name']}, {loc['country']}"
 
-        loc = geo_data[0]
-        lat  = loc["latitude"]
-        lon  = loc["longitude"]
-        display_name = f"{loc.get('name')}, {loc.get('country')}"
-
-        # 날씨 정보 조회
         weather_url = (
             f"https://api.open-meteo.com/v1/forecast?"
-            f"latitude={lat}&longitude={lon}"
-            f"&current_weather=true"
-            f"&hourly=relativehumidity_2m"
-            f"&timezone=auto"
+            f"latitude={lat}&longitude={lon}&current_weather=true"
+            f"&hourly=relativehumidity_2m&timezone=auto"
         )
         with st.spinner(f"{display_name} 날씨 불러오는 중…"):
             w_res = requests.get(weather_url)
         if w_res.status_code != 200:
-            st.error("날씨 API 호출 실패")
+            st.error("날씨 API 오류")
             return
 
         js = w_res.json()
@@ -145,10 +131,8 @@ def today_weather_section():
             cw.get("temperature"),
             cw.get("windspeed"),
             cw.get("winddirection"),
-            cw.get("weathercode")
+            cw.get("weathercode"),
         )
-
-        # 날씨 코드 매핑
         wc_map = {
             0:"맑음",1:"주로 맑음",2:"부분적 구름",3:"구름 많음",
             45:"안개",48:"안개(입상)",
@@ -158,67 +142,61 @@ def today_weather_section():
             95:"뇌우",96:"약한 뇌우",99:"강한 뇌우"
         }
         desc = wc_map.get(code, "알 수 없음")
-
-        # 습도 얻기
-        times = js.get("hourly", {}).get("time", [])
-        hums  = js.get("hourly", {}).get("relativehumidity_2m", [])
+        times = js["hourly"]["time"]
+        hums  = js["hourly"]["relativehumidity_2m"]
         now   = datetime.now().strftime("%Y-%m-%dT%H:00")
         humidity = hums[times.index(now)] if now in times else None
 
-        # 결과 출력
         st.markdown(f"### {display_name} 현재 날씨")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("🌡️ 기온(℃)", temp)
         c2.metric("💨 풍속(m/s)", wind_spd)
         c3.metric("🌫️ 풍향(°)", wind_dir)
-        c4.metric("💧 습도(%)", humidity if humidity is not None else "–")
-        st.markdown(f"**날씨 상태:** {desc}")
-# ────────────────── 6) LLM 테스트 (Hugging Face Inference API) ──────────────────) LLM 테스트 (Hugging Face) ──────────────────
-# ⚙️ 환경변수로부터 토큰 가져오기
-HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+        c4.metric("💧 습도(%)", humidity or "–")
+        st.write(f"**날씨 상태:** {desc}")
 
-@st.cache_resource(show_spinner=False)
-def get_kanana_pipeline():
-    # Hugging Face 허브에서 권한이 필요한 모델 불러오기
-    return pipeline(
-        "text-generation",
-        model="kakaocorp/kanana-nano-2.1b-instruct",
-        # CPU만 쓸 땐 아래 옵션을 빼셔도 되고, GPU가 있으면 device_map="auto"를 써 보세요
-        torch_dtype="auto",
-        use_auth_token=HF_API_TOKEN,
-        trust_remote_code=True,
-        max_new_tokens=150,
-        temperature=0.7
-    )
+# ─── 6) LLM 테스트 ───────────────────────────────────────────────
+def generate_with_kanana(prompt: str) -> str:
+    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
+    payload = {
+        "inputs": prompt,
+        "options": {"use_cache": False},
+        "parameters": {"max_new_tokens": 150, "temperature": 0.7}
+    }
+    res = requests.post(HF_API_URL, headers=headers, json=payload)
+    res.raise_for_status()
+    return res.json()[0]["generated_text"]
 
 def llm_section():
-    st.subheader("🤖 카나나 Nano (Transformers) 테스트")
+    st.subheader("🤖 카나나 Nano (Hugging Face Inference API)")
     prompt = st.text_area("프롬프트 입력", height=150)
     if st.button("생성"):
-        if not HF_API_TOKEN:
-            st.error("⚠️ HF_API_TOKEN이 설정되지 않았습니다.")
+        if not HF_API_TOKEN or not HF_API_URL:
+            st.error("HF_API_TOKEN 또는 HF_API_URL이 설정되지 않았습니다.")
             return
-        with st.spinner("모델 로딩 및 생성 중… (시간이 좀 걸릴 수 있습니다)"):
-            pipe = get_kanana_pipeline()
-            outputs = pipe(prompt)
-            # outputs 는 list of dict
-            text = outputs[0].get("generated_text", "")
-        st.markdown("### 응답")
-        st.write(text)
+        with st.spinner("응답 생성 중…"):
+            try:
+                out = generate_with_kanana(prompt)
+                st.markdown("### 응답")
+                st.write(out)
+            except Exception as e:
+                st.error(f"LLM 호출 오류: {e}")
 
-# ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
+# ─── 7) 앱 레이아웃 ─────────────────────────────────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
 st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM")
 
-tabs = st.tabs(["구글 뉴스", "데이터 히스토그램", "동영상 재생", "선박 관제정보", "오늘의 날씨", "LLM 테스트"])
+tabs = st.tabs([
+    "구글 뉴스", "데이터 히스토그램", "동영상 재생",
+    "선박 관제정보", "오늘의 날씨", "LLM 테스트"
+])
 with tabs[0]:
     st.subheader("▶ 구글 뉴스 크롤링 (RSS)")
-    kw = st.text_input("검색 키워드", "ESG", key="news_kw")
-    num = st.slider("가져올 기사 개수", 5, 20, 10, key="news_num")
-    if st.button("보기", key="news_btn"):
-        with st.spinner(f"‘{kw}’ 뉴스 로딩…"):
-            for it in fetch_google_news(kw, num):
-                st.markdown(f"- **[{it['source']} · {it['date']}]** [{it['title']}]({it['link']})")
+    kw  = st.text_input("검색 키워드", "ESG")
+    num = st.slider("가져올 기사 개수", 5, 20, 10)
+    if st.button("보기"):
+        for it in fetch_google_news(kw, num):
+            st.markdown(f"- **[{it['source']} · {it['date']}]** [{it['title']}]({it['link']})")
 with tabs[1]:
     sample_data_section()
 with tabs[2]:
