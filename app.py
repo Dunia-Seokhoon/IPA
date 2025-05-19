@@ -7,19 +7,14 @@ import requests
 from datetime import datetime, date
 from urllib.parse import urlencode
 
-# ──────────────── 여기에 API 키를 하드코딩 ────────────────
+# ──────────────── 여기서부터 API 키를 하드코딩 ────────────────
 API_KEY = "GprdI3W07y8Ul7R0KwyRE0Beb1Y2wqtlBuvzWRqLqIZzEkR7xrPePc6CMQeD9FQAsTyQHh1V8NDK1md4ou4WGw=="
 
 # ────────────────── 1) 뉴스 크롤러 (Google News RSS) ──────────────────
 @st.cache_data(ttl=300)
 def fetch_google_news(keyword: str, max_items: int = 10):
     clean_kw = " ".join(keyword.strip().split())
-    params = {
-        "q": clean_kw,
-        "hl": "ko",
-        "gl": "KR",
-        "ceid": "KR:ko",
-    }
+    params = {"q": clean_kw, "hl": "ko", "gl": "KR", "ceid": "KR:ko"}
     rss_url = "https://news.google.com/rss/search?" + urlencode(params, doseq=True)
     feed = feedparser.parse(rss_url)
 
@@ -112,12 +107,39 @@ def vessel_monitoring_section():
             """
         )
 
-# ────────────────── 5) 앱 레이아웃 (탭 구성) ──────────────────
-st.set_page_config(page_title="통합 데모", layout="centered")
-st.title("📈 통합 데모: 구글 뉴스 · 데이터 · 동영상 · 선박")
+# ────────────────── 5) 오늘의 날씨 섹션 ──────────────────
+def today_weather_section():
+    st.subheader("☀️ 오늘의 날씨 조회")
+    city = st.text_input("도시 이름을 입력하세요", value="Seoul")
+    if st.button("🔍 날씨 가져오기", key="weather_btn"):
+        coords = {
+            "Seoul":   (37.5665, 126.9780),
+            "Busan":   (35.1796, 129.0756),
+            "Incheon": (37.4563, 126.7052),
+        }
+        lat, lon = coords.get(city, coords["Seoul"])
+        url = (
+            f"https://api.open-meteo.com/v1/forecast?"
+            f"latitude={lat}&longitude={lon}"
+            f"&current_weather=true&timezone=Asia/Seoul"
+        )
+        with st.spinner(f"{city} 날씨 불러오는 중…"):
+            resp = requests.get(url)
+            resp.raise_for_status()
+            w = resp.json()["current_weather"]
 
-tab_news, tab_hist, tab_vid, tab_vessel = st.tabs(
-    ["구글 뉴스", "데이터 히스토그램", "동영상 재생", "선박 관제정보"]
+        st.markdown(f"### {city}의 현재 날씨")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("🌡️ 기온(℃)", w["temperature"])
+        c2.metric("💨 풍속(m/s)", w["windspeed"])
+        c3.metric("🌫️ 풍향(°)", w["winddirection"])
+
+# ────────────────── 6) 앱 레이아웃 (탭 구성) ──────────────────
+st.set_page_config(page_title="통합 데모", layout="centered")
+st.title("📈 통합 데모: 구글 뉴스 · 데이터 · 동영상 · 선박 · 날씨")
+
+tab_news, tab_hist, tab_vid, tab_vessel, tab_weather = st.tabs(
+    ["구글 뉴스", "데이터 히스토그램", "동영상 재생", "선박 관제정보", "오늘의 날씨"]
 )
 
 with tab_news:
@@ -127,7 +149,10 @@ with tab_news:
     if st.button("최신 뉴스 보기", key="news_btn"):
         with st.spinner(f"‘{kw}’ 뉴스 불러오는 중…"):
             for item in fetch_google_news(kw, num):
-                st.markdown(f"- **[{item['source']} · {item['date']}]** [{item['title']}]({item['link']})")
+                st.markdown(
+                    f"- **[{item['source']} · {item['date']}]** "
+                    f"[{item['title']}]({item['link']})"
+                )
 
 with tab_hist:
     sample_data_section()
@@ -137,3 +162,6 @@ with tab_vid:
 
 with tab_vessel:
     vessel_monitoring_section()
+
+with tab_weather:
+    today_weather_section()
