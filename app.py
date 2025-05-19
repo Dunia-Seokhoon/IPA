@@ -10,7 +10,7 @@ from urllib.parse import urlencode, quote_plus  # ← quote_plus 추가
 API_KEY = os.getenv("ODCLOUD_API_KEY", "GprdI3W07y8Ul7R0KwyRE0Beb1Y2wqtlBuvzWRqLqIZzEkR7xrPePc6CMQeD9FQAsTyQHh1V8NDK1md4ou4WGw==")
 
 # Hugging Face Inference API 설정
-HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
+HF_API_TOKEN = os.getenv("HF_API_TOKEN", "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")
 HF_API_URL   = os.getenv("HF_API_URL", "https://api-inference.huggingface.co/models/gpt2")
 
 # ────────────────── 1) 뉴스 크롤러 (Google News RSS) ──────────────────
