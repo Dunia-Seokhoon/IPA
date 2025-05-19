@@ -6,10 +6,6 @@ import feedparser
 import requests
 from datetime import datetime, date
 from urllib.parse import urlencode
-from dotenv import load_dotenv
-
-# 환경변수 로드
-load_dotenv()
 API_KEY = os.getenv("ODCLOUD_API_KEY")
 
 # Hugging Face Inference API 설정
@@ -190,6 +186,7 @@ with tabs[4]:
     today_weather_section()
 with tabs[5]:
     llm_section()
+
 
 
 
