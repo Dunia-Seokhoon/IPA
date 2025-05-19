@@ -16,3 +16,4 @@ python-dotenv
 llama-index-core
 llama-index-embeddings-openai
 llama-index-llms-openai
+text<br>llama-index-readers-file<br>pymupdf<br>pdfminer.six<br>
