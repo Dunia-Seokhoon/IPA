@@ -93,7 +93,7 @@ def vessel_monitoring_section():
 # ────────────────── 5) 오늘의 날씨 섹션 (동적 도시 검색) ──────────────────
 def today_weather_section():
     st.subheader("☀️ 오늘의 날씨 조회")
-    city_name = st.text_input("도시 이름 입력 (예: 서울, Seoul, 부산, Busan)", key="weather_city_input")", key="weather_city_input")
+    city_name = st.text_input("도시 이름 입력 (예: Seoul, Busan, Incheon)", key="weather_city_input")
     if st.button("🔍 날씨 가져오기", key="weather_search"):
         if not city_name:
             st.warning("도시 이름을 입력해 주세요.")
