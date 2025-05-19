@@ -6,7 +6,7 @@ import feedparser
 import requests
 from datetime import datetime, date
 from urllib.parse import urlencode
-API_KEY = os.getenv("GprdI3W07y8Ul7R0KwyRE0Beb1Y2wqtlBuvzWRqLqIZzEkR7xrPePc6CMQeD9FQAsTyQHh1V8NDK1md4ou4WGw==")
+API_KEY = os.getenv("ODCLOUD_API_KEY", "GprdI3W07y8Ul7R0KwyRE0Beb1Y2wqtlBuvzWRqLqIZzEkR7xrPePc6CMQeD9FQAsTyQHh1V8NDK1md4ou4WGw==")
 
 # Hugging Face Inference API 설정
 HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
