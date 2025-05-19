@@ -24,4 +24,3 @@ llama-index-readers-file       # ← PDF/Word/PPTX
 pdfminer.six
 pymupdf         # (= PyMuPDF, 빠른 PDF 파서)
 
-server.maxUploadSize
