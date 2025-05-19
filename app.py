@@ -14,6 +14,12 @@ from llama_index.core import (
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 import logging, traceback
+import openai    # ← NEW
+openai.api_key = (
+    st.secrets.get("OPENAI_API_KEY")         # .streamlit/secrets.toml
+    or os.getenv("OPENAI_API_KEY", "")       # 환경변수
+)
+
 # API 키들 (모두 Secrets 또는 환경변수에서 불러옵니다)
 API_KEY      = os.getenv("ODCLOUD_API_KEY")
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
@@ -284,6 +290,49 @@ def rag_chatbot_section():
         except Exception as e:
             st.error(f"⚠️ 오류: {e}")
             traceback.print_exc()
+# ────────────────── 6-B) ChatGPT 클론 섹션 ──────────────────
+def chatgpt_clone_section():
+    st.subheader("💬 ChatGPT 클론 (OpenAI ChatCompletion)")
+
+    # ① 세션 상태 준비
+    if "gpt_messages" not in st.session_state:
+        st.session_state.gpt_messages = []
+
+    # ② 이전 대화 출력
+    for m in st.session_state.gpt_messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
+
+    # ③ 사용자 입력
+    prompt = st.chat_input("메시지를 입력하세요")
+    if not prompt:
+        return
+
+    st.session_state.gpt_messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # ④ OpenAI 대화 완성(스트리밍)
+    try:
+        resp = openai.ChatCompletion.create(
+            model="gpt-4o-mini",              # 필요시 gpt-3.5-turbo 로 변경
+            messages=st.session_state.gpt_messages,
+            stream=True
+        )
+        assistant_buf = ""
+        with st.chat_message("assistant"):
+            placeholder = st.empty()
+            for chunk in resp:
+                delta = chunk["choices"][0].get("delta", {})
+                if "content" in delta:
+                    assistant_buf += delta["content"]
+                    placeholder.markdown(assistant_buf + "▌")
+            placeholder.markdown(assistant_buf)
+        st.session_state.gpt_messages.append(
+            {"role": "assistant", "content": assistant_buf}
+        )
+    except Exception as e:
+        st.error(f"OpenAI 호출 오류: {e}")
 
 # ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
@@ -291,12 +340,14 @@ st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM"
 
 tabs = st.tabs([
     "구글 뉴스", "데이터 히스토그램", "동영상 재생",
-    "선박 관제정보", "오늘의 날씨", "LLM 테스트", "문서 챗봇"
+    "선박 관제정보", "오늘의 날씨", "LLM 테스트",
+    "문서 챗봇",         # 기존
+    "ChatGPT 클론"       # ← NEW
 ])
 with tabs[0]:
     st.subheader("▶ 구글 뉴스 크롤링 (RSS)")
     kw  = st.text_input("검색 키워드", "ESG")
-    num = st.slider("가져올 기사 개수", 5, 20, 10)
+    num = st.slider("가져올 기사 개수", 5, 50 , 10)
     if st.button("보기"):
         for it in fetch_google_news(kw, num):
             st.markdown(f"- **[{it['source']} · {it['date']}]** [{it['title']}]({it['link']})")
@@ -313,6 +364,9 @@ with tabs[5]:
 
 with tabs[6]:
     rag_chatbot_section()
+
+with tabs[7]:           # 새 탭 인덱스
+    chatgpt_clone_section()
 
 
 
