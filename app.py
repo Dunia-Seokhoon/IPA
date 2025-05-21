@@ -1,8 +1,10 @@
 import os
-import base64
-import time 
-import tiktoken
 import streamlit as st
+import openai
+import base64
+import backoff
+import tiktoken
+import time
 import pandas as pd
 import matplotlib.pyplot as plt
 import feedparser
@@ -17,7 +19,6 @@ from llama_index.core import (
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 import logging, traceback
-import openai                             # ← NEW
 openai.api_key = (
     st.secrets.get("OPENAI_API_KEY")         # .streamlit/secrets.toml
     or os.getenv("OPENAI_API_KEY", "")       # 환경변수
