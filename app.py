@@ -295,85 +295,55 @@ def rag_chatbot_section():
 
 # ────────────────── 6-B) ChatGPT 클론 섹션 ──────────────────
 def chatgpt_clone_section():
-    st.subheader("💬 ChatGPT 클론 (OpenAI ChatCompletion)")
+    st.subheader("💬 ChatGPT 클론")
 
-    # ── 0) 이미지 업로더 (항상 보여야 하므로 함수 맨 위에 둠)
-    img_file = st.file_uploader(
-        "🖼️ 이미지 업로드 (선택)", type=["png", "jpg", "jpeg"]
-    )
-    if img_file:
-        st.image(img_file, caption="업로드 미리보기", use_column_width=True)
-
-    # ── 1) 세션 상태
-    if "gpt_messages" not in st.session_state:
-        st.session_state.gpt_messages = []
-
-    # ── 2) 이전 대화 출력
-    for m in st.session_state.gpt_messages:
-        if m.get("type") == "image_url":
-            st.chat_message(m["role"]).image(m["content"])
-        else:
-            st.chat_message(m["role"]).markdown(m["content"])
-
-    # ── 3) 텍스트 입력
-    prompt = st.chat_input("메시지를 입력하세요")
-
-    # 아무 입력도 없고 이미지도 없으면 종료
-    if not prompt and img_file is None:
+    # ── 업로드
+    img_file = st.file_uploader("🖼️ 이미지 (선택)", type=["png","jpg","jpeg"])
+    prompt   = st.chat_input("메시지를 입력하세요")
+    if img_file is None and not prompt:
         return
 
-    # ── 4) 사용자가 업로드한 이미지를 base64 URL로 변환
-    img_b64_url = None
-    if img_file:               # 이미지가 있을 때만 처리
-        b64 = base64.b64encode(img_file.read()).decode("utf-8")
-        img_b64_url = f"data:image/png;base64,{b64}"
-        # 채팅 기록에 저장 (출력용)
-        st.session_state.gpt_messages.append({
-            "role": "user", "content": img_b64_url, "type": "image_url"
-        })
-        st.chat_message("user").image(img_b64_url, caption="(업로드)")
+    # ── base64 변환
+    img_block = None
+    if img_file:
+        b64 = base64.b64encode(img_file.getvalue()).decode()
+        img_block = {
+            "type":"image_url",
+            "image_url":{"url":f"data:image/png;base64,{b64}"}
+        }
+        st.image(img_file, use_container_width=True)
 
-    # ── 5) 텍스트 메시지 저장 & 출력
+    # ── 메시지 준비
+    user_blocks = []
     if prompt:
-        st.session_state.gpt_messages.append(
-            {"role": "user", "content": prompt}
-        )
-        st.chat_message("user").markdown(prompt)
+        user_blocks.append({ "type":"text", "text": prompt })
+    if img_block:
+        user_blocks.append(img_block)
 
-    # ── 6) OpenAI 호출용 메시지 배열 만들기
-    #     이미지가 있을 경우, user 메시지를 두 파트(text + image_url)로 구성
-    api_messages = []
-    for m in st.session_state.gpt_messages:
-        if m.get("type") == "image_url":
-            api_messages.append({
-                "role": "user",
-                "content": [{"type":"image_url","image_url":{"url": m["content"]}}]
-            })
-        else:
-            api_messages.append(m)
+    st.session_state.setdefault("msgs", [])
+    st.session_state.msgs.append({ "role":"user", "content": user_blocks })
 
-    # ── 7) 스트리밍 호출
+    # ── OpenAI Vision 호출
     try:
         resp = openai.chat.completions.create(
             model="gpt-4o-mini",
-            messages=api_messages,
+            messages=st.session_state.msgs,
+            max_tokens=400,
             stream=True
         )
-        assistant_buf = ""
+        answer = ""
         with st.chat_message("assistant"):
             ph = st.empty()
-            for chunk in resp:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    assistant_buf += delta.content
-                    ph.markdown(assistant_buf + "▌")
-            ph.markdown(assistant_buf)
-        st.session_state.gpt_messages.append(
-            {"role": "assistant", "content": assistant_buf}
-        )
-    except Exception as e:
-        st.error(f"OpenAI 호출 오류: {e}")
+            for delta in resp:
+                chunk = delta.choices[0].delta
+                if chunk.content:
+                    answer += chunk.content
+                    ph.markdown(answer + "▌")
+            ph.markdown(answer)
+        st.session_state.msgs.append({ "role":"assistant", "content": answer })
 
+    except Exception as e:
+        st.error(f"OpenAI Vision 호출 오류: {e}")
 # ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
 st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM")
