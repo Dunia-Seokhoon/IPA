@@ -4,6 +4,7 @@ pandas
 matplotlib
 feedparser
 requests
+pillow  
 langchain-community>=0.2.0   # 핵심
 huggingface-hub
 langchain-huggingface
