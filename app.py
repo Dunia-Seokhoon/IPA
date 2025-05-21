@@ -294,56 +294,104 @@ def rag_chatbot_section():
             traceback.print_exc()
 
 # ────────────────── 6-B) ChatGPT 클론 섹션 ──────────────────
+# Vision 모델용 토크나이저
+enc = tiktoken.encoding_for_model("gpt-4o-mini")
+
+def num_tokens(messages: list) -> int:
+    """메시지 배열의 토큰 수 간이 계산"""
+    total = 0
+    for m in messages:
+        # Vision 메시지는 list 형태
+        if isinstance(m["content"], list):
+            for blk in m["content"]:
+                if blk["type"] == "text":
+                    total += len(enc.encode(blk["text"]))
+                elif blk["type"] == "image_url":
+                    total += len(enc.encode(blk["image_url"]["url"]))
+        else:                                    # 일반 텍스트
+            total += len(enc.encode(m["content"]))
+    return total
+
+# 429 (RateLimitError) 시 최대 60초 간 지수(backoff) 재시도
+@backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, jitter=None)
+def safe_chat_completion(messages, model="gpt-4o-mini"):
+    tk_in = num_tokens(messages)
+    if tk_in > 15_000:
+        raise ValueError(f"입력 토큰 {tk_in}개 → 너무 큽니다. 프롬프트/이미지 크기를 줄여주세요.")
+    return openai.chat.completions.create(
+        model=model,
+        messages=messages,
+        max_tokens=300,
+        stream=True
+    )
+
+# ───────────────────────────────────────────
 def chatgpt_clone_section():
-    st.subheader("💬 ChatGPT 클론")
+    st.subheader("💬 ChatGPT 클론 (Vision)")
 
-    # ── 업로드
-    img_file = st.file_uploader("🖼️ 이미지 (선택)", type=["png","jpg","jpeg"])
-    prompt   = st.chat_input("메시지를 입력하세요")
-    if img_file is None and not prompt:
-        return
-
-    # ── base64 변환
+    # 0) 이미지 업로더
+    img_file = st.file_uploader("🖼️ 이미지 (선택)", type=["png", "jpg", "jpeg"])
     img_block = None
     if img_file:
-        b64 = base64.b64encode(img_file.getvalue()).decode()
+        # base64 인코딩
+        img_bytes = img_file.getvalue()
+        b64 = base64.b64encode(img_bytes).decode()
         img_block = {
-            "type":"image_url",
-            "image_url":{"url":f"data:image/png;base64,{b64}"}
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{b64}"}
         }
-        st.image(img_file, use_container_width=True)
+        st.image(img_bytes, use_container_width=True)
 
-    # ── 메시지 준비
-    user_blocks = []
+    # 1) 세션 초기화
+    st.session_state.setdefault("gpt_msgs", [])
+
+    # 2) 기존 대화 렌더링
+    for m in st.session_state.gpt_msgs:
+        if isinstance(m["content"], list):                     # Vision user 메시지
+            for blk in m["content"]:
+                if blk["type"] == "text":
+                    st.chat_message(m["role"]).markdown(blk["text"])
+                elif blk["type"] == "image_url":
+                    st.chat_message(m["role"]).image(blk["image_url"]["url"])
+        else:
+            st.chat_message(m["role"]).markdown(m["content"])
+
+    # 3) 사용자 입력
+    prompt = st.chat_input("메시지를 입력하세요")
+    if not prompt and img_block is None:
+        return
+
+    # 4) 사용자 메시지 준비 (텍스트/이미지 모두 가능)
+    user_content = []
     if prompt:
-        user_blocks.append({ "type":"text", "text": prompt })
+        user_content.append({"type": "text", "text": prompt})
     if img_block:
-        user_blocks.append(img_block)
+        user_content.append(img_block)
 
-    st.session_state.setdefault("msgs", [])
-    st.session_state.msgs.append({ "role":"user", "content": user_blocks })
+    st.session_state.gpt_msgs.append({"role": "user", "content": user_content})
 
-    # ── OpenAI Vision 호출
+    # 5) Vision 호출 (안전 래퍼 사용)
     try:
-        resp = openai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=st.session_state.msgs,
-            max_tokens=400,
-            stream=True
-        )
-        answer = ""
-        with st.chat_message("assistant"):
-            ph = st.empty()
-            for delta in resp:
-                chunk = delta.choices[0].delta
-                if chunk.content:
-                    answer += chunk.content
-                    ph.markdown(answer + "▌")
-            ph.markdown(answer)
-        st.session_state.msgs.append({ "role":"assistant", "content": answer })
+        resp = safe_chat_completion(st.session_state.gpt_msgs)
 
+        assistant_buf = ""
+        with st.chat_message("assistant"):
+            placeholder = st.empty()
+            for chunk in resp:
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    assistant_buf += delta.content
+                    placeholder.markdown(assistant_buf + "▌")
+            placeholder.markdown(assistant_buf)
+
+        st.session_state.gpt_msgs.append(
+            {"role": "assistant", "content": assistant_buf}
+        )
+
+    except openai.RateLimitError as e:
+        st.error(f"Rate limit 초과: {e}")
     except Exception as e:
-        st.error(f"OpenAI Vision 호출 오류: {e}")
+        st.error(f"OpenAI 호출 오류: {e}")
 # ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
 st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM")
