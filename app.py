@@ -332,13 +332,12 @@ def safe_chat_completion(messages, model="gpt-4o-mini"):
     )
 
 # ───────────────────────────────────────────
-def compress_image(file, max_px=512, quality=70) -> bytes:
-    """이미지를 JPEG로 압축 & 크기 제한"""
+def compress_image(file, max_px=768, quality=85):
+    """이미지를 JPEG로 압축 & 해상도 제한"""
     img = Image.open(file)
     if max(img.size) > max_px:
         ratio = max_px / max(img.size)
-        new_size = (int(img.width * ratio), int(img.height * ratio))
-        img = img.resize(new_size, Image.LANCZOS)
+        img = img.resize((int(img.width*ratio), int(img.height*ratio)), Image.LANCZOS)
     buf = BytesIO()
     img.convert("RGB").save(buf, format="JPEG", quality=quality)
     return buf.getvalue()
@@ -346,63 +345,57 @@ def compress_image(file, max_px=512, quality=70) -> bytes:
 def chatgpt_clone_section():
     st.subheader("💬 ChatGPT 클론 (Vision)")
 
+    # ── 업로더 + 품질·해상도 슬라이더
     img_file = st.file_uploader("🖼️ 이미지 (선택)", type=["png","jpg","jpeg"])
+    col1, col2 = st.columns(2)
+    max_px   = col1.slider("최대 해상도(px)", 256, 1024, 768, 128)
+    quality  = col2.slider("JPEG 품질(%)", 30, 95, 85, 5)
     prompt   = st.chat_input("메시지를 입력하세요")
 
     if img_file is None and not prompt:
         return
 
-    # ── 메시지 배열 준비
     user_blocks = []
     if prompt:
         user_blocks.append({"type":"text", "text":prompt})
 
-    # ── 이미지 처리
     if img_file:
-        # 1) 압축
-        small_jpg = compress_image(img_file)
-        st.image(small_jpg, caption="업로드(자동 압축)", use_container_width=True)
+        jpg_bytes = compress_image(img_file, max_px, quality)
+        st.image(jpg_bytes, caption=f"미리보기 ({len(jpg_bytes)//1024} KB)", 
+                 use_container_width=True)
 
-        try:
-            # 2-A) 가능한 경우 파일-ID 방식 (토큰 0)
-            vis_file = openai.files.create(
-                file=BytesIO(small_jpg),
-                purpose="vision"
-            )
-            user_blocks.append({
-                "type":"image_file",
-                "image_file": { "file_id": vis_file.id }
-            })
-        except Exception:
-            # 2-B) 백업: base64 URI (압축한 후라 수천 토큰 수준)
-            b64 = base64.b64encode(small_jpg).decode()
-            user_blocks.append({
-                "type":"image_url",
-                "image_url": { "url": f"data:image/jpeg;base64,{b64}" }
-            })
+        b64 = base64.b64encode(jpg_bytes).decode()
+        img_block = {"type":"image_url",
+                     "image_url":{"url":f"data:image/jpeg;base64,{b64}"}}
+        user_blocks.append(img_block)
 
-    # ── 세션 기록
+    # ── 토큰 수 사전 확인
+    prospective = st.session_state.get("gpt_msgs", []) + [{"role":"user","content":user_blocks}]
+    tk_in = num_tokens(prospective)
+    if tk_in > 8000:         # 8 K 이하면 대체로 안전
+        st.error(f"⚠️ 입력 토큰 {tk_in:,} 개 → 너무 큽니다. "
+                 "해상도/품질을 더 줄여 주세요.")
+        return
+
+    # ── 메시지 저장
     st.session_state.setdefault("gpt_msgs", [])
-    st.session_state.gpt_msgs.append({"role":"user", "content":user_blocks})
+    st.session_state.gpt_msgs.append({"role":"user","content":user_blocks})
 
-    # ── Vision 호출 (토큰·백오프 래퍼)
+    # ── 호출 (backoff 포함)
     try:
         resp = safe_chat_completion(st.session_state.gpt_msgs)
-        buf  = ""
+        buf = ""
         with st.chat_message("assistant"):
             ph = st.empty()
             for chunk in resp:
-                txt = chunk.choices[0].delta.content
-                if txt:
-                    buf += txt
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    buf += delta
                     ph.markdown(buf + "▌")
             ph.markdown(buf)
-        st.session_state.gpt_msgs.append({"role":"assistant", "content":buf})
-
-    except ValueError as e:            # 입력 토큰 초과
-        st.error(str(e))
+        st.session_state.gpt_msgs.append({"role":"assistant","content":buf})
     except openai.RateLimitError:
-        st.error("⏳ 레이트 리밋에 걸렸습니다. 잠시 후 다시 시도해 주세요.")
+        st.error("⏳ 레이트 리밋에 걸렸습니다. 잠시 뒤 다시 시도해 주세요.")
     except Exception as e:
         st.error(f"OpenAI 호출 오류: {e}")
 # ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
