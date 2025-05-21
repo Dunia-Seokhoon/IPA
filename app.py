@@ -296,46 +296,61 @@ def rag_chatbot_section():
 def chatgpt_clone_section():
     st.subheader("💬 ChatGPT 클론 (OpenAI ChatCompletion)")
 
-    # ① 세션 상태 준비
+    # 0) 이미지 업로드 처리
+    image_file = st.file_uploader("이미지 업로드 (optional)", type=["png","jpg","jpeg"])
+    if image_file:
+        st.image(image_file, caption="업로드된 이미지 미리보기")
+        # 예: 외부 호스팅 후 URL을 얻는 로직 또는 base64 인코딩
+        # image_url = upload_to_your_server(image_file)
+        # st.session_state.gpt_messages.append({
+        #     "role": "user",
+        #     "content": image_url,
+        #     "type": "image_url"
+        # })
+
+    # 1) 세션 상태 준비
     if "gpt_messages" not in st.session_state:
         st.session_state.gpt_messages = []
 
-    # ② 이전 대화 출력
+    # 2) 이전 대화 출력
     for m in st.session_state.gpt_messages:
-        with st.chat_message(m["role"]):
-            st.markdown(m["content"])
+        if m.get("type") == "image_url":
+            st.chat_message(m["role"]).image(m["content"])
+        else:
+            st.chat_message(m["role"]).markdown(m["content"])
 
-    # ③ 사용자 입력 (고유 key 지정)
+    # 3) 사용자 입력
     prompt = st.chat_input("메시지를 입력하세요", key="gpt_clone_input")
-    if not prompt:
+    if not prompt and not image_file:
         return
 
-    # ④ 유저 메시지 기록 및 렌더링
-    st.session_state.gpt_messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    # 4) 메시지 기록
+    if prompt:
+        st.session_state.gpt_messages.append({"role": "user", "content": prompt})
+        st.chat_message("user").markdown(prompt)
+    elif image_file:
+        # 이미지 메시지만 보낼 경우
+        # st.session_state.gpt_messages.append({
+        #     "role":"user", "content": image_url, "type":"image_url"
+        # })
+        pass  # 실제 전송 로직은 위에서 작성한 대로 image_url 확보 후 추가
 
-    # ⑤ OpenAI 대화 완성(스트리밍)
+    # 5) OpenAI 호출 (이미지URL 포함 메시지 리스트 전송)
     try:
         resp = openai.chat.completions.create(
-            model="gpt-4o-mini",              # 필요시 gpt-3.5-turbo 로 변경
+            model="gpt-4o-mini",
             messages=st.session_state.gpt_messages,
             stream=True
         )
-
         assistant_buf = ""
         with st.chat_message("assistant"):
             placeholder = st.empty()
             for chunk in resp:
-                # ChatCompletionChunk 객체의 choices 속성에 접근
-                choice = chunk.choices[0]
-                delta  = choice.delta
-                if delta.content:
-                    assistant_buf += delta.content
+                if chunk.choices[0].delta.content:
+                    assistant_buf += chunk.choices[0].delta.content
                     placeholder.markdown(assistant_buf + "▌")
             placeholder.markdown(assistant_buf)
 
-        # ⑥ 어시스턴트 메시지 기록
         st.session_state.gpt_messages.append(
             {"role": "assistant", "content": assistant_buf}
         )
