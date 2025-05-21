@@ -1,3 +1,4 @@
+
 import os
 import streamlit as st
 import openai
@@ -23,6 +24,8 @@ openai.api_key = (
     st.secrets.get("OPENAI_API_KEY")         # .streamlit/secrets.toml
     or os.getenv("OPENAI_API_KEY", "")       # 환경변수
 )
+from io import BytesIO
+from PIL import Image 
 
 # API 키들 (모두 Secrets 또는 환경변수에서 불러옵니다)
 API_KEY      = os.getenv("ODCLOUD_API_KEY")
@@ -329,70 +332,77 @@ def safe_chat_completion(messages, model="gpt-4o-mini"):
     )
 
 # ───────────────────────────────────────────
+def compress_image(file, max_px=512, quality=70) -> bytes:
+    """이미지를 JPEG로 압축 & 크기 제한"""
+    img = Image.open(file)
+    if max(img.size) > max_px:
+        ratio = max_px / max(img.size)
+        new_size = (int(img.width * ratio), int(img.height * ratio))
+        img = img.resize(new_size, Image.LANCZOS)
+    buf = BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=quality)
+    return buf.getvalue()
+
 def chatgpt_clone_section():
     st.subheader("💬 ChatGPT 클론 (Vision)")
 
-    # 0) 이미지 업로더
-    img_file = st.file_uploader("🖼️ 이미지 (선택)", type=["png", "jpg", "jpeg"])
-    img_block = None
-    if img_file:
-        # base64 인코딩
-        img_bytes = img_file.getvalue()
-        b64 = base64.b64encode(img_bytes).decode()
-        img_block = {
-            "type": "image_url",
-            "image_url": {"url": f"data:image/png;base64,{b64}"}
-        }
-        st.image(img_bytes, use_container_width=True)
+    img_file = st.file_uploader("🖼️ 이미지 (선택)", type=["png","jpg","jpeg"])
+    prompt   = st.chat_input("메시지를 입력하세요")
 
-    # 1) 세션 초기화
-    st.session_state.setdefault("gpt_msgs", [])
-
-    # 2) 기존 대화 렌더링
-    for m in st.session_state.gpt_msgs:
-        if isinstance(m["content"], list):                     # Vision user 메시지
-            for blk in m["content"]:
-                if blk["type"] == "text":
-                    st.chat_message(m["role"]).markdown(blk["text"])
-                elif blk["type"] == "image_url":
-                    st.chat_message(m["role"]).image(blk["image_url"]["url"])
-        else:
-            st.chat_message(m["role"]).markdown(m["content"])
-
-    # 3) 사용자 입력
-    prompt = st.chat_input("메시지를 입력하세요")
-    if not prompt and img_block is None:
+    if img_file is None and not prompt:
         return
 
-    # 4) 사용자 메시지 준비 (텍스트/이미지 모두 가능)
-    user_content = []
+    # ── 메시지 배열 준비
+    user_blocks = []
     if prompt:
-        user_content.append({"type": "text", "text": prompt})
-    if img_block:
-        user_content.append(img_block)
+        user_blocks.append({"type":"text", "text":prompt})
 
-    st.session_state.gpt_msgs.append({"role": "user", "content": user_content})
+    # ── 이미지 처리
+    if img_file:
+        # 1) 압축
+        small_jpg = compress_image(img_file)
+        st.image(small_jpg, caption="업로드(자동 압축)", use_container_width=True)
 
-    # 5) Vision 호출 (안전 래퍼 사용)
+        try:
+            # 2-A) 가능한 경우 파일-ID 방식 (토큰 0)
+            vis_file = openai.files.create(
+                file=BytesIO(small_jpg),
+                purpose="vision"
+            )
+            user_blocks.append({
+                "type":"image_file",
+                "image_file": { "file_id": vis_file.id }
+            })
+        except Exception:
+            # 2-B) 백업: base64 URI (압축한 후라 수천 토큰 수준)
+            b64 = base64.b64encode(small_jpg).decode()
+            user_blocks.append({
+                "type":"image_url",
+                "image_url": { "url": f"data:image/jpeg;base64,{b64}" }
+            })
+
+    # ── 세션 기록
+    st.session_state.setdefault("gpt_msgs", [])
+    st.session_state.gpt_msgs.append({"role":"user", "content":user_blocks})
+
+    # ── Vision 호출 (토큰·백오프 래퍼)
     try:
         resp = safe_chat_completion(st.session_state.gpt_msgs)
-
-        assistant_buf = ""
+        buf  = ""
         with st.chat_message("assistant"):
-            placeholder = st.empty()
+            ph = st.empty()
             for chunk in resp:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    assistant_buf += delta.content
-                    placeholder.markdown(assistant_buf + "▌")
-            placeholder.markdown(assistant_buf)
+                txt = chunk.choices[0].delta.content
+                if txt:
+                    buf += txt
+                    ph.markdown(buf + "▌")
+            ph.markdown(buf)
+        st.session_state.gpt_msgs.append({"role":"assistant", "content":buf})
 
-        st.session_state.gpt_msgs.append(
-            {"role": "assistant", "content": assistant_buf}
-        )
-
-    except openai.RateLimitError as e:
-        st.error(f"Rate limit 초과: {e}")
+    except ValueError as e:            # 입력 토큰 초과
+        st.error(str(e))
+    except openai.RateLimitError:
+        st.error("⏳ 레이트 리밋에 걸렸습니다. 잠시 후 다시 시도해 주세요.")
     except Exception as e:
         st.error(f"OpenAI 호출 오류: {e}")
 # ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
