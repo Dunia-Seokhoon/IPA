@@ -322,7 +322,7 @@ def num_tokens(messages: list) -> int:
 @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, jitter=None)
 def safe_chat_completion(messages, model="gpt-4o-mini"):
     tk_in = num_tokens(messages)
-    if tk_in > 15_000:
+    if tk_in > 50_000:
         raise ValueError(f"입력 토큰 {tk_in}개 → 너무 큽니다. 프롬프트/이미지 크기를 줄여주세요.")
     return openai.chat.completions.create(
         model=model,
