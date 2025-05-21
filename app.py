@@ -372,7 +372,7 @@ def chatgpt_clone_section():
     # ── 토큰 수 사전 확인
     prospective = st.session_state.get("gpt_msgs", []) + [{"role":"user","content":user_blocks}]
     tk_in = num_tokens(prospective)
-    if tk_in > 8000:         # 8 K 이하면 대체로 안전
+    if tk_in > 50_000:         # 8 K 이하면 대체로 안전
         st.error(f"⚠️ 입력 토큰 {tk_in:,} 개 → 너무 큽니다. "
                  "해상도/품질을 더 줄여 주세요.")
         return
