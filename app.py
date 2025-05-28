@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+import streamlit.components.v1 as components
 import openai
 import base64
 import backoff
@@ -22,7 +23,7 @@ import logging, traceback
 from io import BytesIO
 from PIL import Image
 
-# API 키들 설정
+# ─── API 키들 설정 ───────────────────────────────────────────────────────────
 openai.api_key = (
     st.secrets.get("OPENAI_API_KEY")
     or os.getenv("OPENAI_API_KEY", "")
@@ -31,7 +32,7 @@ API_KEY      = os.getenv("ODCLOUD_API_KEY")
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 HF_API_URL   = os.getenv("HF_API_URL")
 
-# ────────────────── 1) 뉴스 크롤러 (Google News RSS) ──────────────────
+# ─── 1) 뉴스 크롤러 (Google News RSS) ─────────────────────────────────────────
 @st.cache_data(ttl=300)
 def fetch_google_news(keyword: str, max_items: int = 10):
     clean_kw = " ".join(keyword.strip().split())
@@ -50,7 +51,7 @@ def fetch_google_news(keyword: str, max_items: int = 10):
         })
     return items
 
-# ────────────────── 2) CSV 히스토그램 섹션 ──────────────────
+# ─── 2) CSV 히스토그램 섹션 ────────────────────────────────────────────────────
 def sample_data_section():
     st.subheader("📊 샘플 데이터 히스토그램")
     uploaded_file = st.file_uploader("CSV 파일 업로드 (optional)", type=["csv"])
@@ -68,7 +69,7 @@ def sample_data_section():
     else:
         st.info("CSV 파일을 올리면 히스토그램을 볼 수 있습니다.")
 
-# ────────────────── 3) 동영상 업로드·재생 섹션 ──────────────────
+# ─── 3) 동영상 업로드·재생 섹션 ────────────────────────────────────────────────
 def video_upload_section():
     st.subheader("📹 동영상 업로드 & 재생")
     video_file = st.file_uploader("동영상 파일 업로드", type=["mp4","mov","avi"])
@@ -77,7 +78,7 @@ def video_upload_section():
     else:
         st.info("파일을 선택해 주세요.")
 
-# ────────────────── 4) 선박 관제정보 조회 섹션 ──────────────────
+# ─── 4) 선박 관제정보 조회 섹션 ────────────────────────────────────────────────
 def vessel_monitoring_section():
     st.subheader("🚢 해양수산부 선박 관제정보 조회")
     date_from = st.date_input("조회 시작일", date.today())
@@ -108,7 +109,7 @@ def vessel_monitoring_section():
         else:
             st.warning("조회된 데이터가 없습니다.")
 
-# ────────────────── 5) 오늘의 날씨 섹션 ──────────────────
+# ─── 5) 오늘의 날씨 섹션 ────────────────────────────────────────────────────────
 def today_weather_section():
     st.subheader("☀️ 오늘의 날씨 조회")
     city_name = st.text_input("도시 이름 입력 (예: 서울, Busan)")
@@ -129,9 +130,8 @@ def today_weather_section():
             st.warning("도시를 찾을 수 없습니다.")
             return
 
-        loc  = results[0]
-        lat  = loc["latitude"]
-        lon  = loc["longitude"]
+        loc          = results[0]
+        lat, lon     = loc["latitude"], loc["longitude"]
         display_name = f"{loc['name']}, {loc['country']}"
 
         weather_url = (
@@ -175,7 +175,7 @@ def today_weather_section():
         c4.metric("💧 습도(%)", humidity or "–")
         st.markdown(f"**날씨 상태:** {desc}")
 
-# ────────────────── 6) LLM 테스트 (Hugging Face Inference API) ──────────────────
+# ─── 6) LLM 테스트 (Hugging Face Inference API) ─────────────────────────────────
 def generate_with_kanana(prompt: str) -> str:
     headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
     payload = {
@@ -202,7 +202,7 @@ def llm_section():
             except Exception as e:
                 st.error(f"LLM 호출 오류: {e}")
 
-# ────────────────── 7) 문서 기반 챗봇 (LlamaIndex) ──────────────────
+# ─── 7) 문서 기반 챗봇 (LlamaIndex) ───────────────────────────────────────────────
 def rag_chatbot_section():
     st.subheader("📚 문서 기반 챗봇 (RAG with LlamaIndex)")
 
@@ -226,9 +226,9 @@ def rag_chatbot_section():
     os.makedirs("./cache/data", exist_ok=True)
     os.makedirs("./storage",    exist_ok=True)
 
-    if uploaded_file is not None:
-        file_path = os.path.join("cache", "data", uploaded_file.name)
-        with open(file_path, "wb") as f:
+    if uploaded_file:
+        path = os.path.join("cache/data", uploaded_file.name)
+        with open(path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         st.success(f"‘{uploaded_file.name}’ 업로드 완료!")
 
@@ -257,11 +257,11 @@ def rag_chatbot_section():
         return None
 
     index = load_or_build_index()
-    if index is None:
+    if not index:
         st.info("먼저 문서를 업로드하거나 storage 폴더에 기존 인덱스를 두세요.")
         return
 
-    if st.session_state.chat_engine is None:
+    if not st.session_state.chat_engine:
         st.session_state.chat_engine = index.as_chat_engine(
             chat_mode="context",
             similarity_top_k=4,
@@ -287,7 +287,7 @@ def rag_chatbot_section():
             st.error(f"⚠️ 오류: {e}")
             traceback.print_exc()
 
-# ────────────────── ChatGPT 클론 (Vision) 섹션 ──────────────────
+# ─── ChatGPT 클론 (Vision) 섹션 ────────────────────────────────────────────────
 enc = tiktoken.encoding_for_model("gpt-4o-mini")
 
 def num_tokens(messages: list) -> int:
@@ -298,7 +298,7 @@ def num_tokens(messages: list) -> int:
                 if blk["type"] == "text":
                     total += len(enc.encode(blk["text"]))
                 elif blk["type"] == "image_url":
-                    total += len(enc.encode(blk["image_url"]["url"]))
+                    total += len(enc.encode(m["content"][0]["image_url"]["url"]))
         else:
             total += len(enc.encode(m["content"]))
     return total
@@ -307,7 +307,7 @@ def num_tokens(messages: list) -> int:
 def safe_chat_completion(messages, model="gpt-4o-mini"):
     tk_in = num_tokens(messages)
     if tk_in > 50_000:
-        raise ValueError(f"입력 토큰 {tk_in}개 → 너무 큽니다. 프롬프트/이미지 크기를 줄여주세요.")
+        raise ValueError(f"입력 토큰 {tk_in}개 → 너무 큽니다.")
     return openai.chat.completions.create(
         model=model,
         messages=messages,
@@ -347,7 +347,7 @@ def chatgpt_clone_section():
 
     prospective = st.session_state.get("gpt_msgs", []) + [{"role":"user","content":user_blocks}]
     if num_tokens(prospective) > 50_000:
-        st.error("⚠️ 토큰 수 제한 초과. 해상도/품질을 줄여 주세요.")
+        st.error("⚠️ 토큰 수 제한 초과.")
         return
 
     st.session_state.setdefault("gpt_msgs", [])
@@ -370,14 +370,14 @@ def chatgpt_clone_section():
     except Exception as e:
         st.error(f"OpenAI 호출 오류: {e}")
 
-# ────────────────── 8) 앱 레이아웃 (탭 구성) ──────────────────
+# ─── 8) 앱 레이아웃 (탭 구성) ────────────────────────────────────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
 st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM")
 
 tabs = st.tabs([
     "구글 뉴스", "데이터 히스토그램", "동영상 재생",
-    "선박 관제정보", "오늘의 날씨", "LLM 테스트", "문서 챗봇", "ChatGPT 클론",
-    "유튜브 링크"
+    "선박 관제정보", "오늘의 날씨", "LLM 테스트",
+    "문서 챗봇", "ChatGPT 클론", "유튜브 링크"
 ])
 
 with tabs[0]:
@@ -413,10 +413,10 @@ with tabs[8]:
     st.subheader("📺 유튜브 동영상 임베드")
     yt_url = "https://www.youtube.com/watch?v=C7rRKxsqCk4&list=PLMojrPlCX93sjjUH3QQLi0mCYuGfJSfXH&index=12"
     st.video(yt_url)
-    # 또는 iframe 제어가 필요할 때:
-    # import streamlit.components.v1 as components
+    # 또는 iframe 직접 제어:
     # embed_url = "https://www.youtube.com/embed/C7rRKxsqCk4?list=PLMojrPlCX93sjjUH3QQLi0mCYuGfJSfXH&index=12"
     # components.iframe(embed_url, width=700, height=400)
+
 
 
 
