@@ -1,4 +1,3 @@
-
 import os
 import streamlit as st
 import openai
@@ -20,14 +19,14 @@ from llama_index.core import (
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 import logging, traceback
-openai.api_key = (
-    st.secrets.get("OPENAI_API_KEY")         # .streamlit/secrets.toml
-    or os.getenv("OPENAI_API_KEY", "")       # 환경변수
-)
 from io import BytesIO
-from PIL import Image 
+from PIL import Image
 
-# API 키들 (모두 Secrets 또는 환경변수에서 불러옵니다)
+# API 키들 설정
+openai.api_key = (
+    st.secrets.get("OPENAI_API_KEY")
+    or os.getenv("OPENAI_API_KEY", "")
+)
 API_KEY      = os.getenv("ODCLOUD_API_KEY")
 HF_API_TOKEN = os.getenv("HF_API_TOKEN")
 HF_API_URL   = os.getenv("HF_API_URL")
@@ -207,7 +206,6 @@ def llm_section():
 def rag_chatbot_section():
     st.subheader("📚 문서 기반 챗봇 (RAG with LlamaIndex)")
 
-    # ── 사이드바 (키‧파일 업로드)
     with st.sidebar:
         st.markdown("### 🔑 OpenAI API Key")
         api_key = st.text_input(
@@ -220,7 +218,6 @@ def rag_chatbot_section():
             type=["txt", "pdf", "md", "docx", "pptx", "csv"]
         )
 
-    # ── 세션 초기화 & 디렉터리 준비
     if "rag_messages" not in st.session_state:
         st.session_state.rag_messages = []
     if "chat_engine" not in st.session_state:
@@ -229,14 +226,12 @@ def rag_chatbot_section():
     os.makedirs("./cache/data", exist_ok=True)
     os.makedirs("./storage",    exist_ok=True)
 
-    # ── 파일 업로드 핸들링
     if uploaded_file is not None:
         file_path = os.path.join("cache", "data", uploaded_file.name)
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         st.success(f"‘{uploaded_file.name}’ 업로드 완료!")
 
-    # ── LlamaIndex 세팅
     if api_key:
         load_dotenv()
         Settings.llm = OpenAI(model="gpt-4o-mini", temperature=0, api_key=api_key)
@@ -246,9 +241,8 @@ def rag_chatbot_section():
         )
     else:
         st.warning("🔑 OpenAI API Key를 입력해 주세요.")
-        return  # <-- 여기서 함수만 빠져나가도록 변경
+        return
 
-    # ── 인덱스 생성·로드 (캐시 활용)
     @st.cache_resource(show_spinner="🔧 인덱스 빌드 중…")
     def load_or_build_index() -> VectorStoreIndex:
         persist_dir = "./storage"
@@ -265,9 +259,8 @@ def rag_chatbot_section():
     index = load_or_build_index()
     if index is None:
         st.info("먼저 문서를 업로드하거나 storage 폴더에 기존 인덱스를 두세요.")
-        return  # <-- 여기서도 함수만 빠져나가도록
+        return
 
-    # ── ChatEngine 준비 (스트리밍)
     if st.session_state.chat_engine is None:
         st.session_state.chat_engine = index.as_chat_engine(
             chat_mode="context",
@@ -275,50 +268,41 @@ def rag_chatbot_section():
             streaming=True
         )
 
-    # ── 이전 대화 렌더링
     for msg in st.session_state.rag_messages:
         st.chat_message(msg["role"]).markdown(msg["content"])
 
-    # ── 사용자 입력 & 응답
     user_input = st.chat_input("질문을 입력하세요.", key="rag_input")
     if user_input:
-        st.session_state.rag_messages.append({"role": "user", "content": user_input})
+        st.session_state.rag_messages.append({"role":"user","content":user_input})
         st.chat_message("user").markdown(user_input)
-
         try:
             with st.chat_message("assistant"):
                 stream_resp = st.session_state.chat_engine.stream_chat(user_input)
-                buffer = ""
+                buf = ""
                 for chunk in stream_resp.response_gen:
-                    buffer += chunk
-                    st.write(buffer + "▌")
-                st.session_state.rag_messages.append(
-                    {"role": "assistant", "content": buffer}
-                )
+                    buf += chunk
+                    st.write(buf + "▌")
+                st.session_state.rag_messages.append({"role":"assistant","content":buf})
         except Exception as e:
             st.error(f"⚠️ 오류: {e}")
             traceback.print_exc()
 
-# ────────────────── 6-B) ChatGPT 클론 섹션 ──────────────────
-# Vision 모델용 토크나이저
+# ────────────────── ChatGPT 클론 (Vision) 섹션 ──────────────────
 enc = tiktoken.encoding_for_model("gpt-4o-mini")
 
 def num_tokens(messages: list) -> int:
-    """메시지 배열의 토큰 수 간이 계산"""
     total = 0
     for m in messages:
-        # Vision 메시지는 list 형태
         if isinstance(m["content"], list):
             for blk in m["content"]:
                 if blk["type"] == "text":
                     total += len(enc.encode(blk["text"]))
                 elif blk["type"] == "image_url":
                     total += len(enc.encode(blk["image_url"]["url"]))
-        else:                                    # 일반 텍스트
+        else:
             total += len(enc.encode(m["content"]))
     return total
 
-# 429 (RateLimitError) 시 최대 60초 간 지수(backoff) 재시도
 @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, jitter=None)
 def safe_chat_completion(messages, model="gpt-4o-mini"):
     tk_in = num_tokens(messages)
@@ -331,9 +315,7 @@ def safe_chat_completion(messages, model="gpt-4o-mini"):
         stream=True
     )
 
-# ───────────────────────────────────────────
 def compress_image(file, max_px=768, quality=85):
-    """이미지를 JPEG로 압축 & 해상도 제한"""
     img = Image.open(file)
     if max(img.size) > max_px:
         ratio = max_px / max(img.size)
@@ -344,8 +326,6 @@ def compress_image(file, max_px=768, quality=85):
 
 def chatgpt_clone_section():
     st.subheader("💬 ChatGPT 클론 (Vision)")
-
-    # ── 업로더 + 품질·해상도 슬라이더
     img_file = st.file_uploader("🖼️ 이미지 (선택)", type=["png","jpg","jpeg"])
     col1, col2 = st.columns(2)
     max_px   = col1.slider("최대 해상도(px)", 256, 1024, 768, 128)
@@ -358,30 +338,21 @@ def chatgpt_clone_section():
     user_blocks = []
     if prompt:
         user_blocks.append({"type":"text", "text":prompt})
-
     if img_file:
         jpg_bytes = compress_image(img_file, max_px, quality)
-        st.image(jpg_bytes, caption=f"미리보기 ({len(jpg_bytes)//1024} KB)", 
-                 use_container_width=True)
-
+        st.image(jpg_bytes, caption=f"미리보기 ({len(jpg_bytes)//1024} KB)", use_container_width=True)
         b64 = base64.b64encode(jpg_bytes).decode()
-        img_block = {"type":"image_url",
-                     "image_url":{"url":f"data:image/jpeg;base64,{b64}"}}
+        img_block = {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}"}}
         user_blocks.append(img_block)
 
-    # ── 토큰 수 사전 확인
     prospective = st.session_state.get("gpt_msgs", []) + [{"role":"user","content":user_blocks}]
-    tk_in = num_tokens(prospective)
-    if tk_in > 50_000:         # 8 K 이하면 대체로 안전
-        st.error(f"⚠️ 입력 토큰 {tk_in:,} 개 → 너무 큽니다. "
-                 "해상도/품질을 더 줄여 주세요.")
+    if num_tokens(prospective) > 50_000:
+        st.error("⚠️ 토큰 수 제한 초과. 해상도/품질을 줄여 주세요.")
         return
 
-    # ── 메시지 저장
     st.session_state.setdefault("gpt_msgs", [])
     st.session_state.gpt_msgs.append({"role":"user","content":user_blocks})
 
-    # ── 호출 (backoff 포함)
     try:
         resp = safe_chat_completion(st.session_state.gpt_msgs)
         buf = ""
@@ -398,38 +369,55 @@ def chatgpt_clone_section():
         st.error("⏳ 레이트 리밋에 걸렸습니다. 잠시 뒤 다시 시도해 주세요.")
     except Exception as e:
         st.error(f"OpenAI 호출 오류: {e}")
-# ────────────────── 7) 앱 레이아웃 (탭 구성) ──────────────────
+
+# ────────────────── 8) 앱 레이아웃 (탭 구성) ──────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
 st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM")
 
 tabs = st.tabs([
     "구글 뉴스", "데이터 히스토그램", "동영상 재생",
-    "선박 관제정보", "오늘의 날씨", "LLM 테스트","문서 챗봇" , "ChatGPT 클론" 
-   
+    "선박 관제정보", "오늘의 날씨", "LLM 테스트", "문서 챗봇", "ChatGPT 클론",
+    "유튜브 링크"
 ])
+
 with tabs[0]:
     st.subheader("▶ 구글 뉴스 크롤링 (RSS)")
     kw  = st.text_input("검색 키워드", "ESG")
-    num = st.slider("가져올 기사 개수", 5, 50 , 10)
+    num = st.slider("가져올 기사 개수", 5, 50, 10)
     if st.button("보기"):
         for it in fetch_google_news(kw, num):
             st.markdown(f"- **[{it['source']} · {it['date']}]** [{it['title']}]({it['link']})")
+
 with tabs[1]:
     sample_data_section()
+
 with tabs[2]:
     video_upload_section()
+
 with tabs[3]:
     vessel_monitoring_section()
+
 with tabs[4]:
     today_weather_section()
+
 with tabs[5]:
     llm_section()
 
 with tabs[6]:
     rag_chatbot_section()
 
-with tabs[7]:           # 새 탭 인덱스
+with tabs[7]:
     chatgpt_clone_section()
+
+with tabs[8]:
+    st.subheader("📺 유튜브 동영상 임베드")
+    yt_url = "https://www.youtube.com/watch?v=C7rRKxsqCk4&list=PLMojrPlCX93sjjUH3QQLi0mCYuGfJSfXH&index=12"
+    st.video(yt_url)
+    # 또는 iframe 제어가 필요할 때:
+    # import streamlit.components.v1 as components
+    # embed_url = "https://www.youtube.com/embed/C7rRKxsqCk4?list=PLMojrPlCX93sjjUH3QQLi0mCYuGfJSfXH&index=12"
+    # components.iframe(embed_url, width=700, height=400)
+
 
 
 
