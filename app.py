@@ -235,32 +235,26 @@ def chatgpt_clone_section():
 def video_collection_section():
     st.subheader("📺 ESG 영상 모음")
 
-    # 아래 URL들은 모두 “storage.googleapis.com” 도메인을 사용합니다.
-    # 이미 버킷이 공개 권한(allUsers: Storage Object Viewer)이 설정되어 있어야 합니다.
-
     # 1. 사무실에서 이면지 활용하기!
-    st.markdown("#### 사무실에서 이면지 활용하기!")
+    st.markdown("#### (1) 사무실에서 이면지 활용하기!")
     st.video(
-        "https://storage.googleapis.com/"
-        "videoupload_icpa/"
+        "https://storage.googleapis.com/videoupload_icpa/"
         "%EC%82%AC%EB%AC%B4%EC%8B%A4%EC%97%90%EC%84%9C%20%EC%9D%B4%EB%A9%B4%EC%A7%80%20%ED%99%9C%EC%9A%A9%ED%95%98%EA%B8%B0.mp4"
     )
     st.write("")
 
-    # 2. 카페에서 ESG 실천하기 2탄
-    st.markdown("#### 카페에서 ESG 실천하기 2탄")
+    # 2. 카페에서 ESG 실천하기 1탄
+    st.markdown("#### (2) 카페에서 ESG 실천하기 1탄")
     st.video(
-        "https://storage.googleapis.com/"
-        "videoupload_icpa/"
-        "%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%ED%95%98%EA%B8%B0.mp4"
+        "https://storage.googleapis.com/videoupload_icpa/"
+        "%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4"
     )
     st.write("")
 
-    # 3. 카페에서 휴지 적게 사용하기
-    st.markdown("#### 카페에서 휴지 적게 사용하기")
+    # 3. 카페에서 ESG 실천하기 2탄
+    st.markdown("#### (3) 카페에서 ESG 실천하기 2탄")
     st.video(
-        "https://storage.googleapis.com/"
-        "videoupload_icpa/"
+        "https://storage.googleapis.com/videoupload_icpa/"
         "%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%9C%B4%EC%A7%80%20%EC%A0%81%EA%B2%8C%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4"
     )
 
@@ -291,6 +285,7 @@ with tabs[3]:
 
 with tabs[4]:
     video_collection_section()
+
 
 
 
