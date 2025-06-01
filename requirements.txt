@@ -1,27 +1,31 @@
+# ─── 필수 유틸리티 ─────────────────────────────────────────────
 backoff
-streamlit
-pandas
-matplotlib
+python-dotenv
+tiktoken
+openai>=1.14.0          # 1.x → stream 파라미터 지원
+
+# ─── Streamlit & 시각화 ────────────────────────────────────────
+streamlit==1.45.1
+pandas>=2.2
+matplotlib>=3.8
 feedparser
 requests
 pillow
-langchain-community>=0.2.0   # 핵심
+
+# ─── NLP / 임베딩 / 벡터스토어 ─────────────────────────────────
+langchain-community>=0.2.0   # LangChain 핵심
 huggingface-hub
 langchain-huggingface
-sentence-transformers  # MiniLM 임베딩
-faiss-cpu              # or faiss-gpu
-pypdf
-tiktoken
-python-dotenv
-openai>=1.14.0         # 1.x 버전 기준 (stream 매개변수 지원)
+sentence-transformers         # MiniLM 임베딩
+faiss-cpu                     # 또는 faiss-gpu
 
-# — LlamaIndex core & 플러그인 ————
-llama-index-core
-llama-index-openai
-llama-index-embeddings-openai
-llama-index-readers-file  # ← PDF/Word/PPTX
-
-# — PDF 파서 ——————————————
+# ─── PDF 파싱 ────────────────────────────────────────────────
 pdfminer.six
-pymupdf                 # (= PyMuPDF, 빠른 PDF 파서)
+pymupdf                       # (= PyMuPDF, 빠른 PDF 파서)
+pypdf
 
+# ─── LlamaIndex (Core + 플러그인) ────────────────────────────
+llama-index-core==0.12.39
+llama-index-llms-openai>=0.1      # ← NEW: 구 llama-index-openai
+llama-index-embeddings-openai
+llama-index-readers-file          # PDF/Word/PPTX 리더
