@@ -308,8 +308,8 @@ def video_collection_section():
     st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%9C%B4%EC%A7%80%20%EC%A0%81%EA%B2%8C%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
 
 # ─── 6) 앱 레이아웃 (탭 구성) ─────────────────────────────────────────────────────
-st.set_page_config(page_title="통합 데모", layout="centered")
-st.title("📈 통합 데모: 뉴스·선박·날씨·Chatbot·영상 모음")
+st.set_page_config(page_title="인천항만공사 ESG 통합 포털", layout="centered")
+st.title("📈 인천항만공사 ESG 통합 포털: 뉴스·선박·날씨·Chatbot·ESG 캠페인")
 
 tabs = st.tabs([
     "구글 뉴스", "선박 관제정보", "오늘의 날씨", "Chatbot", "ESG 영상 모음"
