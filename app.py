@@ -152,7 +152,7 @@ def today_weather_section():
 
 # ─── 4) Chatbot (Vision) & 요약 기능 ─────────────────────────────────────────
 enc = tiktoken.encoding_for_model("gpt-4o")
-MAX_TOKENS = 262144  # gpt-4o 최대 토큰 허용치 (약 131K)
+MAX_TOKENS = 262144     # gpt-4o 대략 262K 토큰 허용
 SUMMARY_THRESHOLD = 40  # 대화 메시지(turn)가 40개 이상 넘어가면 요약
 
 def num_tokens(messages: list) -> int:
@@ -251,7 +251,6 @@ def chatgpt_clone_section():
     if prompt:
         user_blocks.append({"type": "text", "text": prompt})
     if img_file:
-        # compress_image 함수는 max_px=768, quality=85 고정
         jpg_bytes = compress_image(img_file)
         st.image(jpg_bytes, caption=f"미리보기 ({len(jpg_bytes)//1024} KB)", use_container_width=True)
         b64 = base64.b64encode(jpg_bytes).decode()
@@ -290,7 +289,58 @@ def chatgpt_clone_section():
     except Exception as e:
         st.error(f"OpenAI 호출 오류: {e}")
 
-# ─── 5) 영상 모음 섹션 ───────────────────────────────────────────────────────────
+# ─── 5) 댓글 섹션 ─────────────────────────────────────────────────────────────
+def comments_section():
+    """
+    로컬 CSV 파일(comments.csv)을 사용하여 댓글을 저장하고, 보여주는 섹션.
+    """
+    st.subheader("🗨️ 댓글 남기기")
+
+    # 1) 댓글 파일 경로 설정
+    comments_file = "comments.csv"
+
+    # 2) 댓글을 저장할 CSV 파일이 없으면 헤더만 생성
+    if not os.path.exists(comments_file):
+        df_init = pd.DataFrame(columns=["timestamp", "name", "comment"])
+        df_init.to_csv(comments_file, index=False, encoding="utf-8-sig")
+
+    # 3) 댓글을 입력받을 UI (이름, 댓글 내용, 등록 버튼)
+    with st.form(key="comment_form", clear_on_submit=True):
+        name = st.text_input("이름", max_chars=50)
+        comment = st.text_area("댓글 내용", height=100, max_chars=500)
+        submitted = st.form_submit_button("등록")
+
+    # 4) 사용자가 제출 버튼을 누르면 CSV에 저장
+    if submitted:
+        if not name.strip():
+            st.warning("이름을 입력해 주세요.")
+        elif not comment.strip():
+            st.warning("댓글 내용을 입력해 주세요.")
+        else:
+            # 타임스탬프 생성
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # 새로운 댓글 DataFrame
+            new_row = pd.DataFrame([{
+                "timestamp": ts,
+                "name": name.strip(),
+                "comment": comment.strip()
+            }])
+            # CSV에 이어붙이기
+            new_row.to_csv(comments_file, mode="a", header=False, index=False, encoding="utf-8-sig")
+            st.success("댓글이 등록되었습니다!")
+
+    # 5) 저장된 모든 댓글을 읽어서 화면에 표시
+    try:
+        all_comments = pd.read_csv(comments_file, encoding="utf-8-sig")
+        # 최신순으로 표시하려면 아래처럼 정렬
+        all_comments = all_comments.sort_values(by="timestamp", ascending=False)
+        st.markdown("#### 전체 댓글")
+        for _, row in all_comments.iterrows():
+            st.markdown(f"- **[{row['timestamp']}] {row['name']}**: {row['comment']}")
+    except Exception as e:
+        st.error(f"댓글을 불러오는 중 오류가 발생했습니다: {e}")
+
+# ─── 6) 영상 모음 섹션 ───────────────────────────────────────────────────────────
 def video_collection_section():
     st.subheader("📺 ESG 영상 모음")
     # 1. 사무실에서 이면지 활용하기!
@@ -300,19 +350,19 @@ def video_collection_section():
 
     # 2. 카페에서 ESG 실천하기 1탄
     st.markdown("#### 카페에서 ESG 실천하기 1탄")
-    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
+    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%EB%8A%94%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
     st.write("")
 
     # 3. 카페에서 휴지 적게 사용하기
     st.markdown("#### 카페에서 휴지 적게 사용하기")
     st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%9C%B4%EC%A7%80%20%EC%A0%81%EA%B2%8C%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
 
-# ─── 6) 앱 레이아웃 (탭 구성) ─────────────────────────────────────────────────────
+# ─── 7) 앱 레이아웃 (탭 구성) ─────────────────────────────────────────────────────
 st.set_page_config(page_title="인천항만공사 ESG 통합 포털", layout="centered")
-st.title("📈 인천항만공사 ESG 통합 포털: 뉴스·선박·날씨·Chatbot·ESG 캠페인")
+st.title("📈 인천항만공사 ESG 통합 포털: 뉴스·선박·날씨·Chatbot·댓글·ESG 캠페인")
 
 tabs = st.tabs([
-    "구글 뉴스", "선박 관제정보", "오늘의 날씨", "Chatbot", "ESG 영상 모음"
+    "구글 뉴스", "선박 관제정보", "오늘의 날씨", "Chatbot", "댓글", "ESG 영상 모음"
 ])
 
 with tabs[0]:
@@ -333,6 +383,9 @@ with tabs[3]:
     chatgpt_clone_section()
 
 with tabs[4]:
+    comments_section()
+
+with tabs[5]:
     video_collection_section()
 
 
