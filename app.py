@@ -340,7 +340,96 @@ def comments_section():
     except Exception as e:
         st.error(f"댓글을 불러오는 중 오류가 발생했습니다: {e}")
 
-# ─── 6) 영상 모음 섹션 ───────────────────────────────────────────────────────────
+# ─── 6) “ESG 활동 참여” 섹션 ─────────────────────────────────────────────────────────
+def get_table_download_link(df: pd.DataFrame, filename: str = "participation.csv"):
+    """
+    pandas DataFrame을 CSV로 변환 후, Streamlit 다운로드 링크 HTML 생성
+    """
+    csv = df.to_csv(index=False, encoding="utf-8-sig")
+    b64 = base64.b64encode(csv.encode()).decode()  # 바이너리 데이터를 base64로 인코딩
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">📥 CSV 다운로드</a>'
+    return href
+
+def participation_section():
+    st.subheader("🖊️ ESG 활동 참여")
+    img_dir = "participation_images"
+    csv_file = "participation.csv"
+
+    # 1) 디렉터리 및 CSV 파일이 없으면 생성
+    if not os.path.exists(img_dir):
+        os.makedirs(img_dir)
+    if not os.path.exists(csv_file):
+        df_init = pd.DataFrame(columns=["timestamp", "department", "name", "image_filename"])
+        df_init.to_csv(csv_file, index=False, encoding="utf-8-sig")
+
+    # 2) Streamlit form 생성 (부서, 성명, 이미지)
+    with st.form(key="participation_form", clear_on_submit=True):
+        dept = st.text_input("참여 부서", max_chars=50, help="예: 물류팀, 영업부 등")
+        person = st.text_input("성명", max_chars=30)
+        uploaded_file = st.file_uploader("증명자료(이미지)", type=["png", "jpg", "jpeg"])
+        submit_button = st.form_submit_button("제출")
+
+    # 3) 제출 버튼이 눌리면 로컬에 저장 후 CSV에 기록
+    if submit_button:
+        if not dept.strip():
+            st.warning("참여 부서를 입력해 주세요.")
+        elif not person.strip():
+            st.warning("성명을 입력해 주세요.")
+        elif uploaded_file is None:
+            st.warning("이미지 파일을 업로드해 주세요.")
+        else:
+            # 타임스탬프 생성
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ext = os.path.splitext(uploaded_file.name)[1].lower()  # 예: ".jpg"
+            safe_person = "".join(person.split())  # 공백 제거
+            img_filename = f"{ts}_{safe_person}{ext}"
+            img_path = os.path.join(img_dir, img_filename)
+
+            # 이미지 로컬에 저장
+            with open(img_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+
+            # CSV에 새로운 행 추가
+            new_row = pd.DataFrame([{
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "department": dept.strip(),
+                "name": person.strip(),
+                "image_filename": img_filename
+            }])
+            new_row.to_csv(csv_file, mode="a", header=False, index=False, encoding="utf-8-sig")
+
+            st.success("✅ 참여 정보가 등록되었습니다!")
+
+    # 4) 저장된 CSV 불러와 DataFrame으로 읽기
+    try:
+        all_data = pd.read_csv(csv_file, encoding="utf-8-sig").sort_values(
+            by="timestamp", ascending=False
+        )
+
+        # 4-1) CSV 다운로드 링크 표시
+        st.markdown(
+            get_table_download_link(all_data, filename="participation.csv"),
+            unsafe_allow_html=True
+        )
+
+        # 4-2) 화면에 표로 출력
+        st.dataframe(all_data)
+
+        # 4-3) 이미지 썸네일 + 부서/성명 출력
+        for _, row in all_data.iterrows():
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                img_path = os.path.join(img_dir, row["image_filename"])
+                if os.path.exists(img_path):
+                    st.image(img_path, width=80)
+                else:
+                    st.write("(이미지 없음)")
+            with col2:
+                st.write(f"- **[{row['timestamp']}]** {row['department']} / {row['name']}")
+    except Exception as e:
+        st.error(f"참여 현황을 불러오는 중 오류가 발생했습니다: {e}")
+
+# ─── 7) 영상 모음 섹션 ───────────────────────────────────────────────────────────
 def video_collection_section():
     st.subheader("📺 ESG 영상 모음")
     # 1. 사무실에서 이면지 활용하기!
@@ -350,19 +439,19 @@ def video_collection_section():
 
     # 2. 카페에서 ESG 실천하기 1탄
     st.markdown("#### 카페에서 ESG 실천하기 1탄")
-    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
+    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%EB%8A%94%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
     st.write("")
 
     # 3. 카페에서 휴지 적게 사용하기
     st.markdown("#### 카페에서 휴지 적게 사용하기")
     st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%9C%B4%EC%A7%80%20%EC%A0%81%EA%B2%8C%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
 
-# ─── 7) 앱 레이아웃 (탭 구성) ─────────────────────────────────────────────────────
+# ─── 8) 앱 레이아웃 (탭 구성) ─────────────────────────────────────────────────────
 st.set_page_config(page_title="인천항만공사 ESG 통합 포털", layout="centered")
-st.title("📈 인천항만공사 ESG 통합 포털: 뉴스·선박·날씨·Chatbot·댓글·ESG 캠페인")
+st.title("📈 인천항만공사 ESG 통합 포털: 뉴스·선박·날씨·Chatbot·댓글·ESG 활동 참여·ESG 영상 모음")
 
 tabs = st.tabs([
-    "구글 뉴스", "선박 관제정보", "오늘의 날씨", "Chatbot", "댓글", "ESG 영상 모음"
+    "구글 뉴스", "선박 관제정보", "오늘의 날씨", "Chatbot", "댓글", "ESG 활동 참여", "ESG 영상 모음"
 ])
 
 with tabs[0]:
@@ -386,8 +475,10 @@ with tabs[4]:
     comments_section()
 
 with tabs[5]:
-    video_collection_section()
+    participation_section()
 
+with tabs[6]:
+    video_collection_section()
 
 
 
