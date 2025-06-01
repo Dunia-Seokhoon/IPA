@@ -23,6 +23,8 @@ import logging, traceback
 from io import BytesIO
 from PIL import Image
 
+load_dotenv()
+
 # ─── API 키들 설정 ───────────────────────────────────────────────────────────
 openai.api_key = (
     st.secrets.get("OPENAI_API_KEY")
@@ -148,8 +150,10 @@ def today_weather_section():
         c4.metric("💧 습도(%)", humidity or "–")
         st.markdown(f"**날씨 상태:** {desc}")
 
-# ─── 4) ChatGPT 클론 (Vision) 섹션 ────────────────────────────────────────────────
+# ─── 4) Chatbot (Vision) & 요약 기능 ─────────────────────────────────────────
 enc = tiktoken.encoding_for_model("gpt-4o-mini")
+MAX_TOKENS = 131072  # gpt-4o-mini 최대 토큰 허용치 (약 131K)
+SUMMARY_THRESHOLD = 40  # 대화 메시지(turn)가 40개 이상 넘어가면 요약
 
 def num_tokens(messages: list) -> int:
     total = 0
@@ -159,7 +163,7 @@ def num_tokens(messages: list) -> int:
                 if blk["type"] == "text":
                     total += len(enc.encode(blk["text"]))
                 elif blk["type"] == "image_url":
-                    total += len(enc.encode(m["content"][0]["image_url"]["url"]))
+                    total += len(enc.encode(blk["image_url"]["url"]))
         else:
             total += len(enc.encode(m["content"]))
     return total
@@ -167,8 +171,8 @@ def num_tokens(messages: list) -> int:
 @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, jitter=None)
 def safe_chat_completion(messages, model="gpt-4o-mini"):
     tk_in = num_tokens(messages)
-    if tk_in > 50_000:
-        raise ValueError(f"입력 토큰 {tk_in}개 → 너무 큽니다.")
+    if tk_in > MAX_TOKENS:
+        raise ValueError(f"입력 토큰 {tk_in}개 → 최대 허용치({MAX_TOKENS}) 초과입니다.")
     return openai.chat.completions.create(
         model=model,
         messages=messages,
@@ -180,43 +184,97 @@ def compress_image(file, max_px=768, quality=85):
     img = Image.open(file)
     if max(img.size) > max_px:
         ratio = max_px / max(img.size)
-        img = img.resize((int(img.width*ratio), int(img.height*ratio)), Image.LANCZOS)
+        img = img.resize((int(img.width * ratio), int(img.height * ratio)), Image.LANCZOS)
     buf = BytesIO()
     img.convert("RGB").save(buf, format="JPEG", quality=quality)
     return buf.getvalue()
 
+def summarize_history(history: list) -> str:
+    """
+    전체 history(messages)를 짧게 요약하여 반환하는 함수.
+    GPT에게 요약 요청을 보내고 3문장 이내 요약문을 받아옴.
+    """
+    prompt = [{"role": "system", "content": "아래 대화를 짧게 요약해 주세요."}]
+    prompt += history + [{"role": "user", "content": "자, 이 대화 내용을 3문장 이내로 요약해 줘."}]
+    res = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=prompt,
+        max_tokens=200
+    )
+    return res.choices[0].message.content  # 요약된 텍스트
+
 def chatgpt_clone_section():
-    st.subheader("💬 ChatGPT 클론 (Vision)")
-    img_file = st.file_uploader("🖼️ 이미지 (선택)", type=["png","jpg","jpeg"])
-    col1, col2 = st.columns(2)
-    max_px   = col1.slider("최대 해상도(px)", 256, 1024, 768, 128)
-    quality  = col2.slider("JPEG 품질(%)", 30, 95, 85, 5)
+    st.subheader("💬 Chatbot (Vision)")
+    img_file = st.file_uploader("🖼️ 이미지 (선택)", type=["png", "jpg", "jpeg"])
     prompt   = st.chat_input("메시지를 입력하세요")
 
+    # 세션 스테이트 초기화
+    st.session_state.setdefault("chat_history", [])
+
+    # 1) 대화 기록이 SUMMARY_THRESHOLD 턴을 초과하면 요약 수행
+    if len(st.session_state.chat_history) > SUMMARY_THRESHOLD:
+        try:
+            summary = summarize_history(st.session_state.chat_history)
+            # 요약된 텍스트를 assistant 역할로 저장 후, history를 재구성
+            st.session_state.chat_history = [
+                {"role": "assistant", "content": summary}
+            ]
+        except Exception as e:
+            st.error(f"대화 요약 중 오류가 발생했습니다: {e}")
+            return
+
+    # 2) 화면에 이전 대화 내용 표시
+    for msg in st.session_state.chat_history:
+        role = msg["role"]
+        content = msg["content"]
+        if role == "user":
+            with st.chat_message("user"):
+                # content가 블록 리스트일 경우 처리
+                if isinstance(content, list):
+                    for blk in content:
+                        if blk["type"] == "text":
+                            st.write(blk["text"])
+                        elif blk["type"] == "image_url":
+                            st.image(blk["image_url"]["url"], caption="사용자 업로드 이미지")
+                else:
+                    st.write(content)
+        else:  # assistant
+            with st.chat_message("assistant"):
+                st.write(content)
+
+    # 3) 입력이 없으면 리턴
     if img_file is None and not prompt:
         return
 
+    # 4) 사용자 입력 처리
     user_blocks = []
     if prompt:
-        user_blocks.append({"type":"text", "text":prompt})
+        user_blocks.append({"type": "text", "text": prompt})
     if img_file:
-        jpg_bytes = compress_image(img_file, max_px, quality)
+        # compress_image 함수는 max_px=768, quality=85 고정
+        jpg_bytes = compress_image(img_file)
         st.image(jpg_bytes, caption=f"미리보기 ({len(jpg_bytes)//1024} KB)", use_container_width=True)
         b64 = base64.b64encode(jpg_bytes).decode()
-        img_block = {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}"}}
+        img_block = {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}
         user_blocks.append(img_block)
 
-    prospective = st.session_state.get("gpt_msgs", []) + [{"role":"user","content":user_blocks}]
-    if num_tokens(prospective) > 50_000:
-        st.error("⚠️ 토큰 수 제한 초과.")
+    # 5) 사용자 메시지를 chat_history에 추가
+    st.session_state.chat_history.append({"role": "user", "content": user_blocks})
+
+    # 6) 모델에게 보낼 메시지(prospective)를 구성 후 토큰 검증
+    prospective = st.session_state.chat_history.copy()
+    tk_in = num_tokens(prospective)
+    if tk_in > MAX_TOKENS:
+        st.error(f"현재 대화 토큰 수({tk_in})가 너무 많아 호출할 수 없습니다.\n"
+                 "오래된 대화를 요약하거나 일부 메시지를 제거해 주세요.")
         return
 
-    st.session_state.setdefault("gpt_msgs", [])
-    st.session_state.gpt_msgs.append({"role":"user","content":user_blocks})
-
+    # 7) GPT 호출 및 출력
     try:
-        resp = safe_chat_completion(st.session_state.gpt_msgs)
+        resp = safe_chat_completion(st.session_state.chat_history)
         buf = ""
+        # assistant 메시지를 미리 추가해두고, 내용을 스트리밍 중 계속 덧붙임
+        st.session_state.chat_history.append({"role": "assistant", "content": ""})
         with st.chat_message("assistant"):
             ph = st.empty()
             for chunk in resp:
@@ -225,9 +283,10 @@ def chatgpt_clone_section():
                     buf += delta
                     ph.markdown(buf + "▌")
             ph.markdown(buf)
-        st.session_state.gpt_msgs.append({"role":"assistant","content":buf})
+        # 완성된 assistant 응답을 세션에 반영
+        st.session_state.chat_history[-1]["content"] = buf
     except openai.RateLimitError:
-        st.error("⏳ 레이트 리밋에 걸렸습니다. 잠시 뒤 다시 시도해 주세요.")
+        st.error("⏳ 레이트 리밋에 걸렸습니다. 잠시 후 다시 시도해 주세요.")
     except Exception as e:
         st.error(f"OpenAI 호출 오류: {e}")
 
@@ -250,10 +309,10 @@ def video_collection_section():
 
 # ─── 6) 앱 레이아웃 (탭 구성) ─────────────────────────────────────────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
-st.title("📈 통합 데모: 뉴스·선박·날씨·ChatGPT 클론·영상 모음")
+st.title("📈 통합 데모: 뉴스·선박·날씨·Chatbot·영상 모음")
 
 tabs = st.tabs([
-    "구글 뉴스", "선박 관제정보", "오늘의 날씨", "ChatGPT 클론", "ESG 영상 모음"
+    "구글 뉴스", "선박 관제정보", "오늘의 날씨", "Chatbot", "ESG 영상 모음"
 ])
 
 with tabs[0]:
@@ -275,6 +334,7 @@ with tabs[3]:
 
 with tabs[4]:
     video_collection_section()
+
 
 
 
