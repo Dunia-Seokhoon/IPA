@@ -15,8 +15,6 @@
  python-dotenv
  openai>=1.14.0         # 1.x 버전 기준 (stream 매개변수 지원)
 
-+# GCS 에 업로드/다운로드를 위해 반드시 필요
- google-cloud-storage
 
  # — LlamaIndex core & 플러그인 ————
  llama-index-core
