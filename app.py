@@ -51,34 +51,7 @@ def fetch_google_news(keyword: str, max_items: int = 10):
         })
     return items
 
-# ─── 2) CSV 히스토그램 섹션 ────────────────────────────────────────────────────
-def sample_data_section():
-    st.subheader("📊 샘플 데이터 히스토그램")
-    uploaded_file = st.file_uploader("CSV 파일 업로드 (optional)", type=["csv"])
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        st.dataframe(df)
-        nums = df.select_dtypes(include="number").columns.tolist()
-        if nums:
-            col = st.selectbox("Numeric 컬럼 선택", nums)
-            fig, ax = plt.subplots()
-            ax.hist(df[col], bins=10)
-            ax.set_xlabel(col)
-            ax.set_ylabel("Frequency")
-            st.pyplot(fig)
-    else:
-        st.info("CSV 파일을 올리면 히스토그램을 볼 수 있습니다.")
-
-# ─── 3) 동영상 업로드·재생 섹션 ────────────────────────────────────────────────
-def video_upload_section():
-    st.subheader("📹 동영상 업로드 & 재생")
-    video_file = st.file_uploader("동영상 파일 업로드", type=["mp4","mov","avi"])
-    if video_file:
-        st.video(video_file)
-    else:
-        st.info("파일을 선택해 주세요.")
-
-# ─── 4) 선박 관제정보 조회 섹션 ────────────────────────────────────────────────
+# ─── 2) 선박 관제정보 조회 섹션 ────────────────────────────────────────────────
 def vessel_monitoring_section():
     st.subheader("🚢 해양수산부 선박 관제정보 조회")
     date_from = st.date_input("조회 시작일", date.today())
@@ -109,7 +82,7 @@ def vessel_monitoring_section():
         else:
             st.warning("조회된 데이터가 없습니다.")
 
-# ─── 5) 오늘의 날씨 섹션 ────────────────────────────────────────────────────────
+# ─── 3) 오늘의 날씨 섹션 ────────────────────────────────────────────────────────
 def today_weather_section():
     st.subheader("☀️ 오늘의 날씨 조회")
     city_name = st.text_input("도시 이름 입력 (예: 서울, Busan)")
@@ -175,119 +148,7 @@ def today_weather_section():
         c4.metric("💧 습도(%)", humidity or "–")
         st.markdown(f"**날씨 상태:** {desc}")
 
-# ─── 6) LLM 테스트 (Hugging Face Inference API) ─────────────────────────────────
-def generate_with_kanana(prompt: str) -> str:
-    headers = {"Authorization": f"Bearer {HF_API_TOKEN}"}
-    payload = {
-        "inputs":     prompt,
-        "options":    {"use_cache": False},
-        "parameters": {"max_new_tokens": 150, "temperature": 0.7}
-    }
-    res = requests.post(HF_API_URL, headers=headers, json=payload, timeout=30)
-    res.raise_for_status()
-    return res.json()[0]["generated_text"]
-
-def llm_section():
-    st.subheader("🤖 카나나 Nano (Hugging Face Inference API)")
-    prompt = st.text_area("프롬프트 입력", height=150)
-    if st.button("생성"):
-        if not HF_API_TOKEN or not HF_API_URL:
-            st.error("HF_API_TOKEN 또는 HF_API_URL이 설정되지 않았습니다.")
-            return
-        with st.spinner("응답 생성 중…"):
-            try:
-                out = generate_with_kanana(prompt)
-                st.markdown("### 응답")
-                st.write(out)
-            except Exception as e:
-                st.error(f"LLM 호출 오류: {e}")
-
-# ─── 7) 문서 기반 챗봇 (LlamaIndex) ───────────────────────────────────────────────
-def rag_chatbot_section():
-    st.subheader("📚 문서 기반 챗봇 (RAG with LlamaIndex)")
-
-    with st.sidebar:
-        st.markdown("### 🔑 OpenAI API Key")
-        api_key = st.text_input(
-            "OPENAI_API_KEY",
-            value=st.secrets.get("OPENAI_API_KEY", ""),
-            type="password"
-        )
-        uploaded_file = st.file_uploader(
-            "📄 인덱싱할 문서 업로드",
-            type=["txt", "pdf", "md", "docx", "pptx", "csv"]
-        )
-
-    if "rag_messages" not in st.session_state:
-        st.session_state.rag_messages = []
-    if "chat_engine" not in st.session_state:
-        st.session_state.chat_engine = None
-
-    os.makedirs("./cache/data", exist_ok=True)
-    os.makedirs("./storage",    exist_ok=True)
-
-    if uploaded_file:
-        path = os.path.join("cache/data", uploaded_file.name)
-        with open(path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        st.success(f"‘{uploaded_file.name}’ 업로드 완료!")
-
-    if api_key:
-        load_dotenv()
-        Settings.llm = OpenAI(model="gpt-4o-mini", temperature=0, api_key=api_key)
-        Settings.embed_model = OpenAIEmbedding(
-            model="text-embedding-3-small",
-            api_key=api_key
-        )
-    else:
-        st.warning("🔑 OpenAI API Key를 입력해 주세요.")
-        return
-
-    @st.cache_resource(show_spinner="🔧 인덱스 빌드 중…")
-    def load_or_build_index() -> VectorStoreIndex:
-        persist_dir = "./storage"
-        if os.listdir("cache/data"):
-            docs = SimpleDirectoryReader("cache/data").load_data()
-            idx  = VectorStoreIndex.from_documents(docs)
-            idx.storage_context.persist(persist_dir)
-            return idx
-        if os.path.exists(os.path.join(persist_dir, "docstore.json")):
-            sc  = StorageContext.from_defaults(persist_dir=persist_dir)
-            return load_index_from_storage(sc)
-        return None
-
-    index = load_or_build_index()
-    if not index:
-        st.info("먼저 문서를 업로드하거나 storage 폴더에 기존 인덱스를 두세요.")
-        return
-
-    if not st.session_state.chat_engine:
-        st.session_state.chat_engine = index.as_chat_engine(
-            chat_mode="context",
-            similarity_top_k=4,
-            streaming=True
-        )
-
-    for msg in st.session_state.rag_messages:
-        st.chat_message(msg["role"]).markdown(msg["content"])
-
-    user_input = st.chat_input("질문을 입력하세요.", key="rag_input")
-    if user_input:
-        st.session_state.rag_messages.append({"role":"user","content":user_input})
-        st.chat_message("user").markdown(user_input)
-        try:
-            with st.chat_message("assistant"):
-                stream_resp = st.session_state.chat_engine.stream_chat(user_input)
-                buf = ""
-                for chunk in stream_resp.response_gen:
-                    buf += chunk
-                    st.write(buf + "▌")
-                st.session_state.rag_messages.append({"role":"assistant","content":buf})
-        except Exception as e:
-            st.error(f"⚠️ 오류: {e}")
-            traceback.print_exc()
-
-# ─── ChatGPT 클론 (Vision) 섹션 ────────────────────────────────────────────────
+# ─── 4) ChatGPT 클론 (Vision) 섹션 ────────────────────────────────────────────────
 enc = tiktoken.encoding_for_model("gpt-4o-mini")
 
 def num_tokens(messages: list) -> int:
@@ -370,52 +231,51 @@ def chatgpt_clone_section():
     except Exception as e:
         st.error(f"OpenAI 호출 오류: {e}")
 
-# ─── 8) 앱 레이아웃 (탭 구성) ────────────────────────────────────────────────
+# ─── 5) 영상 모음 섹션 ───────────────────────────────────────────────────────────
+def video_collection_section():
+    st.subheader("📺 ESG 영상 모음")
+    # 1. 사무실에서 이면지 활용하기!
+    st.markdown("#### 사무실에서 이면지 활용하기!")
+    st.video("https://storage.cloud.google.com/videoupload_icpa/%EC%82%AC%EB%AC%B4%EC%8B%A4%EC%97%90%EC%84%9C%20%EC%9D%B4%EB%A9%B4%EC%A7%80%20%ED%99%9C%EC%9A%A9%ED%95%98%EA%B8%B0.mp4?authuser=2")
+    st.write("")  # 줄 간격
+
+    # 2. 카페에서 ESG 실천하기 2탄
+    st.markdown("#### 카페에서 ESG 실천하기 2탄")
+    st.video("https://storage.cloud.google.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%ED%95%98%EA%B8%B0.mp4?authuser=2")
+    st.write("")
+
+    # 3. 카페에서 휴지 적게 사용하기
+    st.markdown("#### 카페에서 휴지 적게 사용하기")
+    st.video("https://storage.cloud.google.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%9C%B4%EC%A7%80%20%EC%A0%81%EA%B2%8C%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4?authuser=2")
+
+# ─── 6) 앱 레이아웃 (탭 구성) ─────────────────────────────────────────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
-st.title("📈 통합 데모: 뉴스·데이터·동영상·선박·날씨·LLM")
+st.title("📈 통합 데모: 뉴스·선박·날씨·ChatGPT 클론·영상 모음")
 
 tabs = st.tabs([
-    "구글 뉴스", "데이터 히스토그램", "동영상 재생",
-    "선박 관제정보", "오늘의 날씨", "LLM 테스트",
-    "문서 챗봇", "ChatGPT 클론", "유튜브 링크"
+    "구글 뉴스", "선박 관제정보", "오늘의 날씨", "ChatGPT 클론", "ESG 영상 모음"
 ])
 
 with tabs[0]:
     st.subheader("▶ 구글 뉴스 크롤링 (RSS)")
     kw  = st.text_input("검색 키워드", "ESG")
     num = st.slider("가져올 기사 개수", 5, 50, 10)
-    if st.button("보기"):
+    if st.button("보기", key="news_btn"):
         for it in fetch_google_news(kw, num):
             st.markdown(f"- **[{it['source']} · {it['date']}]** [{it['title']}]({it['link']})")
 
 with tabs[1]:
-    sample_data_section()
-
-with tabs[2]:
-    video_upload_section()
-
-with tabs[3]:
     vessel_monitoring_section()
 
-with tabs[4]:
+with tabs[2]:
     today_weather_section()
 
-with tabs[5]:
-    llm_section()
-
-with tabs[6]:
-    rag_chatbot_section()
-
-with tabs[7]:
+with tabs[3]:
     chatgpt_clone_section()
 
-with tabs[8]:
-    st.subheader("📺 유튜브 동영상 임베드")
-    yt_url = "https://www.youtube.com/watch?v=C7rRKxsqCk4&list=PLMojrPlCX93sjjUH3QQLi0mCYuGfJSfXH&index=12"
-    st.video(yt_url)
-    # 또는 iframe 직접 제어:
-    # embed_url = "https://www.youtube.com/embed/C7rRKxsqCk4?list=PLMojrPlCX93sjjUH3QQLi0mCYuGfJSfXH&index=12"
-    # components.iframe(embed_url, width=700, height=400)
+with tabs[4]:
+    video_collection_section()
+
 
 
 
