@@ -169,7 +169,7 @@ def num_tokens(messages: list) -> int:
     return total
 
 @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, jitter=None)
-def safe_chat_completion(messages, model="gpt-4o-mini"):
+def safe_chat_completion(messages, model="gpt-4o"):
     tk_in = num_tokens(messages)
     if tk_in > MAX_TOKENS:
         raise ValueError(f"입력 토큰 {tk_in}개 → 최대 허용치({MAX_TOKENS}) 초과입니다.")
