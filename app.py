@@ -58,7 +58,7 @@ def vessel_monitoring_section():
     date_to   = st.date_input("조회 종료일", date.today())
     page      = st.number_input("페이지 번호", 1, 1000, 1)
     per_page  = st.slider("한 번에 가져올 건수", 1, 1000, 100)
-    if st.button("🔍 조회", key="vessel_btn"):
+    if st.button("🔍 조회"):
         params = {
             "serviceKey": API_KEY,
             "page":       page,
@@ -86,7 +86,7 @@ def vessel_monitoring_section():
 def today_weather_section():
     st.subheader("☀️ 오늘의 날씨 조회")
     city_name = st.text_input("도시 이름 입력 (예: 서울, Busan)")
-    if st.button("🔍 날씨 가져오기", key="weather_btn"):
+    if st.button("🔍 날씨 가져오기"):
         if not city_name:
             st.warning("도시 이름을 입력해 주세요.")
             return
@@ -191,7 +191,7 @@ def chatgpt_clone_section():
     col1, col2 = st.columns(2)
     max_px   = col1.slider("최대 해상도(px)", 256, 1024, 768, 128)
     quality  = col2.slider("JPEG 품질(%)", 30, 95, 85, 5)
-    prompt   = st.chat_input("메시지를 입력하세요", key="chat_input")
+    prompt   = st.chat_input("메시지를 입력하세요")
 
     if img_file is None and not prompt:
         return
@@ -234,29 +234,19 @@ def chatgpt_clone_section():
 # ─── 5) 영상 모음 섹션 ───────────────────────────────────────────────────────────
 def video_collection_section():
     st.subheader("📺 ESG 영상 모음")
-
     # 1. 사무실에서 이면지 활용하기!
-    st.markdown("#### (1) 사무실에서 이면지 활용하기!")
-    st.video(
-        "https://storage.googleapis.com/videoupload_icpa/"
-        "%EC%82%AC%EB%AC%B4%EC%8B%A4%EC%97%90%EC%84%9C%20%EC%9D%B4%EB%A9%B4%EC%A7%80%20%ED%99%9C%EC%9A%A9%ED%95%98%EA%B8%B0.mp4"
-    )
-    st.write("")
+    st.markdown("#### 사무실에서 이면지 활용하기!")
+    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%82%AC%EB%AC%B4%EC%8B%A4%EC%97%90%EC%84%9C%20%EC%9D%B4%EB%A9%B4%EC%A7%80%20%ED%99%9C%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
+    st.write("")  # 줄 간격
 
     # 2. 카페에서 ESG 실천하기 1탄
-    st.markdown("#### (2) 카페에서 ESG 실천하기 1탄")
-    st.video(
-        "https://storage.googleapis.com/videoupload_icpa/"
-        "%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4"
-    )
+    st.markdown("#### 카페에서 ESG 실천하기 1탄")
+    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
     st.write("")
 
-    # 3. 카페에서 ESG 실천하기 2탄
-    st.markdown("#### (3) 카페에서 ESG 실천하기 2탄")
-    st.video(
-        "https://storage.googleapis.com/videoupload_icpa/"
-        "%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%9C%B4%EC%A7%80%20%EC%A0%81%EA%B2%8C%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4"
-    )
+    # 3. 카페에서 휴지 적게 사용하기
+    st.markdown("#### 카페에서 휴지 적게 사용하기")
+    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%9C%B4%EC%A7%80%20%EC%A0%81%EA%B2%8C%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
 
 # ─── 6) 앱 레이아웃 (탭 구성) ─────────────────────────────────────────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
@@ -268,8 +258,8 @@ tabs = st.tabs([
 
 with tabs[0]:
     st.subheader("▶ 구글 뉴스 크롤링 (RSS)")
-    kw  = st.text_input("검색 키워드", "ESG", key="news_kw")
-    num = st.slider("가져올 기사 개수", 5, 50, 10, key="news_num")
+    kw  = st.text_input("검색 키워드", "ESG")
+    num = st.slider("가져올 기사 개수", 5, 50, 10)
     if st.button("보기", key="news_btn"):
         for it in fetch_google_news(kw, num):
             st.markdown(f"- **[{it['source']} · {it['date']}]** [{it['title']}]({it['link']})")
