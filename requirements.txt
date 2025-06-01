@@ -1,27 +1,27 @@
- backoff
- streamlit
- pandas
- matplotlib
- feedparser
- requests
- pillow
- langchain-community>=0.2.0   # 핵심
- huggingface-hub
- langchain-huggingface
- sentence-transformers  # MiniLM 임베딩
- faiss-cpu              # or faiss-gpu
- pypdf
- tiktoken
- python-dotenv
- openai>=1.14.0         # 1.x 버전 기준 (stream 매개변수 지원)
+backoff
+streamlit
+pandas
+matplotlib
+feedparser
+requests
+pillow
+langchain-community>=0.2.0   # 핵심
+huggingface-hub
+langchain-huggingface
+sentence-transformers  # MiniLM 임베딩
+faiss-cpu              # or faiss-gpu
+pypdf
+tiktoken
+python-dotenv
+openai>=1.14.0         # 1.x 버전 기준 (stream 매개변수 지원)
 
+# — LlamaIndex core & 플러그인 ————
+llama-index-core
+llama-index-openai
+llama-index-embeddings-openai
+llama-index-readers-file  # ← PDF/Word/PPTX
 
- # — LlamaIndex core & 플러그인 ————
- llama-index-core
- llama-index-openai
- llama-index-embeddings-openai
- llama-index-readers-file  # ← PDF/Word/PPTX
+# — PDF 파서 ——————————————
+pdfminer.six
+pymupdf                 # (= PyMuPDF, 빠른 PDF 파서)
 
- # — PDF 파서 ——————————————
- pdfminer.six
- pymupdf                 # (= PyMuPDF, 빠른 PDF 파서)
