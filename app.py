@@ -23,6 +23,8 @@ import logging, traceback
 from io import BytesIO
 from PIL import Image
 
+load_dotenv()
+
 # ─── API 키들 설정 ───────────────────────────────────────────────────────────
 openai.api_key = (
     st.secrets.get("OPENAI_API_KEY")
@@ -148,8 +150,9 @@ def today_weather_section():
         c4.metric("💧 습도(%)", humidity or "–")
         st.markdown(f"**날씨 상태:** {desc}")
 
-# ─── 4) ChatGPT 클론 (Vision) 섹션 ────────────────────────────────────────────────
+# ─── 4) Chatbot (Vision) 섹션 ────────────────────────────────────────────────
 enc = tiktoken.encoding_for_model("gpt-4o-mini")
+MAX_TOKENS = 131072  # gpt-4o-mini 최대 토큰 허용치 (131k)
 
 def num_tokens(messages: list) -> int:
     total = 0
@@ -159,7 +162,7 @@ def num_tokens(messages: list) -> int:
                 if blk["type"] == "text":
                     total += len(enc.encode(blk["text"]))
                 elif blk["type"] == "image_url":
-                    total += len(enc.encode(m["content"][0]["image_url"]["url"]))
+                    total += len(enc.encode(blk["image_url"]["url"]))
         else:
             total += len(enc.encode(m["content"]))
     return total
@@ -167,8 +170,8 @@ def num_tokens(messages: list) -> int:
 @backoff.on_exception(backoff.expo, openai.RateLimitError, max_time=60, jitter=None)
 def safe_chat_completion(messages, model="gpt-4o-mini"):
     tk_in = num_tokens(messages)
-    if tk_in > 50_000:
-        raise ValueError(f"입력 토큰 {tk_in}개 → 너무 큽니다.")
+    if tk_in > MAX_TOKENS:
+        raise ValueError(f"입력 토큰 {tk_in}개 → 최대 허용치({MAX_TOKENS}) 초과입니다.")
     return openai.chat.completions.create(
         model=model,
         messages=messages,
@@ -186,13 +189,33 @@ def compress_image(file, max_px=768, quality=85):
     return buf.getvalue()
 
 def chatgpt_clone_section():
-    st.subheader("💬 ChatGPT 클론 (Vision)")
+    st.subheader("💬 Chatbot (Vision)")
     img_file = st.file_uploader("🖼️ 이미지 (선택)", type=["png","jpg","jpeg"])
-    col1, col2 = st.columns(2)
-    max_px   = col1.slider("최대 해상도(px)", 256, 1024, 768, 128)
-    quality  = col2.slider("JPEG 품질(%)", 30, 95, 85, 5)
     prompt   = st.chat_input("메시지를 입력하세요")
 
+    # 세션 스테이트에 메시지 기록이 없으면 초기화
+    st.session_state.setdefault("chat_history", [])
+
+    # 이전 대화 내용 표시
+    for msg in st.session_state.chat_history:
+        role = msg["role"]
+        content = msg["content"]
+        if role == "user":
+            with st.chat_message("user"):
+                # content는 블록 리스트이므로 반복하면서 처리
+                if isinstance(content, list):
+                    for blk in content:
+                        if blk["type"] == "text":
+                            st.write(blk["text"])
+                        elif blk["type"] == "image_url":
+                            st.image(blk["image_url"]["url"], caption="사용자 업로드 이미지")
+                else:
+                    st.write(content)
+        else:  # assistant
+            with st.chat_message("assistant"):
+                st.write(content)
+
+    # 입력이 없으면 리턴
     if img_file is None and not prompt:
         return
 
@@ -200,23 +223,20 @@ def chatgpt_clone_section():
     if prompt:
         user_blocks.append({"type":"text", "text":prompt})
     if img_file:
-        jpg_bytes = compress_image(img_file, max_px, quality)
+        jpg_bytes = compress_image(img_file)  # 고정된 max_px=768, quality=85 사용
         st.image(jpg_bytes, caption=f"미리보기 ({len(jpg_bytes)//1024} KB)", use_container_width=True)
         b64 = base64.b64encode(jpg_bytes).decode()
         img_block = {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}"}}
         user_blocks.append(img_block)
 
-    prospective = st.session_state.get("gpt_msgs", []) + [{"role":"user","content":user_blocks}]
-    if num_tokens(prospective) > 50_000:
-        st.error("⚠️ 토큰 수 제한 초과.")
-        return
+    # 사용자 메시지를 세션에 추가
+    st.session_state.chat_history.append({"role":"user","content":user_blocks})
 
-    st.session_state.setdefault("gpt_msgs", [])
-    st.session_state.gpt_msgs.append({"role":"user","content":user_blocks})
-
+    # 모델 호출
     try:
-        resp = safe_chat_completion(st.session_state.gpt_msgs)
+        resp = safe_chat_completion(st.session_state.chat_history)
         buf = ""
+        st.session_state.chat_history.append({"role":"assistant","content":""})  # 미리 추가해두고, content를 이어 붙임
         with st.chat_message("assistant"):
             ph = st.empty()
             for chunk in resp:
@@ -225,7 +245,8 @@ def chatgpt_clone_section():
                     buf += delta
                     ph.markdown(buf + "▌")
             ph.markdown(buf)
-        st.session_state.gpt_msgs.append({"role":"assistant","content":buf})
+        # 완성된 assistant 응답을 세션에 반영
+        st.session_state.chat_history[-1]["content"] = buf
     except openai.RateLimitError:
         st.error("⏳ 레이트 리밋에 걸렸습니다. 잠시 뒤 다시 시도해 주세요.")
     except Exception as e:
@@ -241,7 +262,7 @@ def video_collection_section():
 
     # 2. 카페에서 ESG 실천하기 1탄
     st.markdown("#### 카페에서 ESG 실천하기 1탄")
-    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
+    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%EB%8A%94%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
     st.write("")
 
     # 3. 카페에서 휴지 적게 사용하기
@@ -250,10 +271,10 @@ def video_collection_section():
 
 # ─── 6) 앱 레이아웃 (탭 구성) ─────────────────────────────────────────────────────
 st.set_page_config(page_title="통합 데모", layout="centered")
-st.title("📈 통합 데모: 뉴스·선박·날씨·ChatGPT 클론·영상 모음")
+st.title("📈 통합 데모: 뉴스·선박·날씨·Chatbot·영상 모음")
 
 tabs = st.tabs([
-    "구글 뉴스", "선박 관제정보", "오늘의 날씨", "ChatGPT 클론", "ESG 영상 모음"
+    "구글 뉴스", "선박 관제정보", "오늘의 날씨", "Chatbot", "ESG 영상 모음"
 ])
 
 with tabs[0]:
@@ -275,6 +296,7 @@ with tabs[3]:
 
 with tabs[4]:
     video_collection_section()
+
 
 
 
