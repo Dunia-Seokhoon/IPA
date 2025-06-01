@@ -152,7 +152,7 @@ def today_weather_section():
 
 # ─── 4) Chatbot (Vision) & 요약 기능 ─────────────────────────────────────────
 enc = tiktoken.encoding_for_model("gpt-4o")
-MAX_TOKENS = 131072  # gpt-4o-mini 최대 토큰 허용치 (약 131K)
+MAX_TOKENS = 262144  # gpt-4o 최대 토큰 허용치 (약 131K)
 SUMMARY_THRESHOLD = 40  # 대화 메시지(turn)가 40개 이상 넘어가면 요약
 
 def num_tokens(messages: list) -> int:
