@@ -10,7 +10,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import feedparser
 import requests
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 from urllib.parse import urlencode, quote_plus
 from dotenv import load_dotenv
 from llama_index.core import (
@@ -23,25 +23,7 @@ import logging, traceback
 from io import BytesIO
 from PIL import Image
 
-# ───────────────────────────────────────────────────────────────────────────────
-# Google Cloud Storage용 라이브러리
-from google.cloud import storage
-# ───────────────────────────────────────────────────────────────────────────────
-
 load_dotenv()
-
-# ─── 0) GCS 인증 설정 ─────────────────────────────────────────────────────────
-# JSON 키 파일이 프로젝트 폴더 또는 지정 경로에 저장되어 있다고 가정
-# 실제 파일 이름(또는 경로)이 bc82a232a92df1bf809fb8578f37e97cb477a8ba.json이라면:
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "bc82a232a92df1bf809fb8578f37e97cb477a8ba.json"
-
-# 여러분의 GCS 버킷 이름
-GCS_BUCKET_NAME = "datasheet_icpa"
-
-# GCS 클라이언트 초기화 (환경 변수에 설정된 키를 사용)
-client = storage.Client()
-bucket = client.bucket(GCS_BUCKET_NAME)
-# ───────────────────────────────────────────────────────────────────────────────
 
 # ─── API 키들 설정 ───────────────────────────────────────────────────────────
 openai.api_key = (
@@ -247,6 +229,7 @@ def chatgpt_clone_section():
         content = msg["content"]
         if role == "user":
             with st.chat_message("user"):
+                # content가 블록 리스트일 경우 처리
                 if isinstance(content, list):
                     for blk in content:
                         if blk["type"] == "text":
@@ -312,33 +295,44 @@ def comments_section():
     로컬 CSV 파일(comments.csv)을 사용하여 댓글을 저장하고, 보여주는 섹션.
     """
     st.subheader("🗨️ 댓글 남기기")
+
+    # 1) 댓글 파일 경로 설정
     comments_file = "comments.csv"
+
+    # 2) 댓글을 저장할 CSV 파일이 없으면 헤더만 생성
     if not os.path.exists(comments_file):
         df_init = pd.DataFrame(columns=["timestamp", "name", "comment"])
         df_init.to_csv(comments_file, index=False, encoding="utf-8-sig")
 
+    # 3) 댓글을 입력받을 UI (이름, 댓글 내용, 등록 버튼)
     with st.form(key="comment_form", clear_on_submit=True):
         name = st.text_input("이름", max_chars=50)
         comment = st.text_area("댓글 내용", height=100, max_chars=500)
         submitted = st.form_submit_button("등록")
 
+    # 4) 사용자가 제출 버튼을 누르면 CSV에 저장
     if submitted:
         if not name.strip():
             st.warning("이름을 입력해 주세요.")
         elif not comment.strip():
             st.warning("댓글 내용을 입력해 주세요.")
         else:
+            # 타임스탬프 생성
             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # 새로운 댓글 DataFrame
             new_row = pd.DataFrame([{
                 "timestamp": ts,
                 "name": name.strip(),
                 "comment": comment.strip()
             }])
+            # CSV에 이어붙이기
             new_row.to_csv(comments_file, mode="a", header=False, index=False, encoding="utf-8-sig")
             st.success("댓글이 등록되었습니다!")
 
+    # 5) 저장된 모든 댓글을 읽어서 화면에 표시
     try:
         all_comments = pd.read_csv(comments_file, encoding="utf-8-sig")
+        # 최신순으로 표시하려면 아래처럼 정렬
         all_comments = all_comments.sort_values(by="timestamp", ascending=False)
         st.markdown("#### 전체 댓글")
         for _, row in all_comments.iterrows():
@@ -346,30 +340,27 @@ def comments_section():
     except Exception as e:
         st.error(f"댓글을 불러오는 중 오류가 발생했습니다: {e}")
 
-# ─── 6) “ESG 활동 참여” 섹션 (Google Cloud Storage) ─────────────────────────────────────────────────────────
+# ─── 6) “ESG 활동 참여” 섹션 ─────────────────────────────────────────────────────────
 def get_table_download_link(df: pd.DataFrame, filename: str = "participation.csv"):
     """
     pandas DataFrame을 CSV로 변환 후, Streamlit 다운로드 링크 HTML 생성
     """
     csv = df.to_csv(index=False, encoding="utf-8-sig")
-    b64 = base64.b64encode(csv.encode()).decode()
+    b64 = base64.b64encode(csv.encode()).decode()  # 바이너리 데이터를 base64로 인코딩
     href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">📥 CSV 다운로드</a>'
     return href
 
 def participation_section():
-    st.subheader("🖊️ ESG 활동 참여 (Google Cloud Storage)")
-    # GCS 상의 CSV 블랍 및 이미지 폴더 경로
-    csv_blob = bucket.blob("participation.csv")
-    img_prefix = "participation_images/"
+    st.subheader("🖊️ ESG 활동 참여")
+    img_dir = "participation_images"
+    csv_file = "participation.csv"
 
-    # 1) 버킷에 participation.csv가 없으면 빈 DataFrame을 만들어 업로드
-    if not csv_blob.exists():
-        df_init = pd.DataFrame(columns=["timestamp", "department", "name", "image_path"])
-        csv_init_bytes = df_init.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
-        csv_blob.upload_from_string(
-            csv_init_bytes,
-            content_type="text/csv; charset=utf-8"
-        )
+    # 1) 디렉터리 및 CSV 파일이 없으면 생성
+    if not os.path.exists(img_dir):
+        os.makedirs(img_dir)
+    if not os.path.exists(csv_file):
+        df_init = pd.DataFrame(columns=["timestamp", "department", "name", "image_filename"])
+        df_init.to_csv(csv_file, index=False, encoding="utf-8-sig")
 
     # 2) Streamlit form 생성 (부서, 성명, 이미지)
     with st.form(key="participation_form", clear_on_submit=True):
@@ -378,7 +369,7 @@ def participation_section():
         uploaded_file = st.file_uploader("증명자료(이미지)", type=["png", "jpg", "jpeg"])
         submit_button = st.form_submit_button("제출")
 
-    # 3) 제출 버튼 처리
+    # 3) 제출 버튼이 눌리면 로컬에 저장 후 CSV에 기록
     if submit_button:
         if not dept.strip():
             st.warning("참여 부서를 입력해 주세요.")
@@ -387,74 +378,52 @@ def participation_section():
         elif uploaded_file is None:
             st.warning("이미지 파일을 업로드해 주세요.")
         else:
-            # A) 타임스탬프 생성
-            now_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # 타임스탬프 생성
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             ext = os.path.splitext(uploaded_file.name)[1].lower()  # 예: ".jpg"
-            safe_person = "".join(person.split())
-            image_filename = f"{now_ts}_{safe_person}{ext}"
-            gcs_image_path = img_prefix + image_filename
+            safe_person = "".join(person.split())  # 공백 제거
+            img_filename = f"{ts}_{safe_person}{ext}"
+            img_path = os.path.join(img_dir, img_filename)
 
-            # B) 이미지 블랍 생성 후 GCS에 업로드 (private 상태)
-            img_blob = bucket.blob(gcs_image_path)
-            img_blob.upload_from_string(
-                uploaded_file.getbuffer(),
-                content_type=uploaded_file.type
-            )
+            # 이미지 로컬에 저장
+            with open(img_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
 
-            # C) 메타데이터(CSV) 업데이트
-            # 1) 기존 CSV 다운로드 → DataFrame으로 로드
-            csv_bytes = csv_blob.download_as_bytes()
-            df_existing = pd.read_csv(BytesIO(csv_bytes), encoding="utf-8-sig")
-
-            # 2) 새로운 행 추가
-            new_row = {
+            # CSV에 새로운 행 추가
+            new_row = pd.DataFrame([{
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "department": dept.strip(),
                 "name": person.strip(),
-                "image_path": gcs_image_path
-            }
-            df_existing = pd.concat([df_existing, pd.DataFrame([new_row])], ignore_index=True)
+                "image_filename": img_filename
+            }])
+            new_row.to_csv(csv_file, mode="a", header=False, index=False, encoding="utf-8-sig")
 
-            # 3) 업데이트된 DataFrame을 다시 CSV로 변환 → GCS에 덮어쓰기
-            updated_csv_bytes = df_existing.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
-            csv_blob.upload_from_string(
-                updated_csv_bytes,
-                content_type="text/csv; charset=utf-8"
-            )
+            st.success("✅ 참여 정보가 등록되었습니다!")
 
-            st.success("✅ 참여 정보가 GCS에 저장되었습니다!")
-
-    # 4) 저장된 CSV를 불러와 화면에 표시
+    # 4) 저장된 CSV 불러와 DataFrame으로 읽기
     try:
-        csv_bytes = csv_blob.download_as_bytes()
-        all_data = pd.read_csv(BytesIO(csv_bytes), encoding="utf-8-sig")
-        all_data = all_data.sort_values(by="timestamp", ascending=False)
+        all_data = pd.read_csv(csv_file, encoding="utf-8-sig").sort_values(
+            by="timestamp", ascending=False
+        )
 
-        # 4-1) CSV 다운로드 링크 (로컬 다운로드용)
+        # 4-1) CSV 다운로드 링크 표시
         st.markdown(
             get_table_download_link(all_data, filename="participation.csv"),
             unsafe_allow_html=True
         )
 
-        # 4-2) 테이블 형태로 출력
+        # 4-2) 화면에 표로 출력
         st.dataframe(all_data)
 
-        # 4-3) 이미지 썸네일 + 부서/성명 등 표시
-        st.markdown("#### 참여 이미지 미리보기")
+        # 4-3) 이미지 썸네일 + 부서/성명 출력
         for _, row in all_data.iterrows():
             col1, col2 = st.columns([1, 3])
             with col1:
-                try:
-                    img_blob = bucket.blob(row["image_path"])
-                    # private 버킷이므로 1시간짜리 서명된 URL을 생성
-                    signed_url = img_blob.generate_signed_url(
-                        version="v4",
-                        expiration=timedelta(hours=1),
-                        method="GET"
-                    )
-                    st.image(signed_url, width=80)
-                except Exception:
-                    st.write("(이미지 로드 불가)")
+                img_path = os.path.join(img_dir, row["image_filename"])
+                if os.path.exists(img_path):
+                    st.image(img_path, width=80)
+                else:
+                    st.write("(이미지 없음)")
             with col2:
                 st.write(f"- **[{row['timestamp']}]** {row['department']} / {row['name']}")
     except Exception as e:
@@ -470,7 +439,7 @@ def video_collection_section():
 
     # 2. 카페에서 ESG 실천하기 1탄
     st.markdown("#### 카페에서 ESG 실천하기 1탄")
-    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
+    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%EB%8A%94%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
     st.write("")
 
     # 3. 카페에서 휴지 적게 사용하기
@@ -510,7 +479,6 @@ with tabs[5]:
 
 with tabs[6]:
     video_collection_section()
-
 
 
 
