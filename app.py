@@ -442,9 +442,23 @@ def video_collection_section():
     st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%85%80%EB%B8%94%EB%9F%AC%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
     st.write("")
 
-    # 3. 카페에서 휴지 적게 사용하기
-    st.markdown("#### 카페에서 휴지 적게 사용하기")
+    # 3. 카페에서 ESG 실천하기 2탄
+    st.markdown("#### 카페에서 ESG 실천하기 2탄")
     st.video("https://storage.googleapis.com/videoupload_icpa/%EC%B9%B4%ED%8E%98%EC%97%90%EC%84%9C%20%ED%9C%B4%EC%A7%80%20%EC%A0%81%EA%B2%8C%20%EC%82%AC%EC%9A%A9%ED%95%98%EA%B8%B0.mp4")
+
+    # 4. 회의실에서 불 끄기 
+    st.markdown("#### 회의실에서 불 끄기")
+    st.video("https://storage.googleapis.com/videoupload_icpa/%ED%9A%8C%EC%9D%98%EC%8B%A4%EC%97%90%EC%84%9C%20%EB%B6%88%EB%81%84%EA%B8%B0.mp4")
+
+    # 5.일회용품 사용 줄이기
+    st.markdown("#### 일회용품 사용 줄이기")
+    st.video("https://storage.googleapis.com/videoupload_icpa/%EC%9D%BC%ED%9A%8C%EC%9A%A9%ED%92%88%20%EC%82%AC%EC%9A%A9%20%EC%A4%84%EC%9D%B4%EA%B8%B0.mp4")
+    
+    # 5.분리수거장에서 ESG 실천하기
+    st.markdown("#### 분리수거장에서 ESG 실천하기")
+    st.video("https://storage.googleapis.com/videoupload_icpa/%EB%B6%84%EB%A6%AC%EC%88%98%EA%B1%B0%EC%9E%A5%EC%97%90%EC%84%9C%20%EC%8B%A4%EC%B2%9C%ED%95%98%EB%8A%94%20ESG%20.mp4")
+
+    
 
 # ─── 8) 앱 레이아웃 (탭 구성) ─────────────────────────────────────────────────────
 st.set_page_config(page_title="인천항만공사 ESG 통합 포털", layout="centered")
