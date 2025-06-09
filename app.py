@@ -399,11 +399,10 @@ def comments_section():
         st.error(f"댓글을 불러오는 중 오류가 발생했습니다: {e}")
 
 # ─── 6) ESG 활동 참여 ─────────────────────────────────────────────────────────
-# ─── 6) ESG 활동 참여 ─────────────────────────────────────────────────────────
 def participation_section():
     st.subheader("🖊️ ESG 활동 참여")
 
-    # 1) 기본 10개 목록
+    # 1) 항목 목록 및 옵션
     BASE_ACTIVITIES = [
         "개인 텀블러·머그잔 사용",
         "종이 대신 디지털 문서 활용",
@@ -416,30 +415,30 @@ def participation_section():
         "탄소배출 표시·친환경 배송 서비스 이용",
         "사내 일회용품 사용 줄이기",
     ]
+    SEL_OPTIONS = BASE_ACTIVITIES + ["직접 입력"]
 
-    # 2) 입력 방식 선택 (폼 밖)
+    # 2) 신규 등록용 입력 (폼 밖)
     mode = st.radio(
         "활동 입력 방식",
         ["목록에서 선택", "직접 입력"],
         horizontal=True,
-        key="act_mode"
+        key="reg_mode"
     )
     if mode == "목록에서 선택":
-        activity = st.selectbox("기본 활동 항목 중 선택", BASE_ACTIVITIES, key="act_select")
+        activity = st.selectbox("기본 활동 항목 중 선택", BASE_ACTIVITIES, key="reg_select")
     else:
-        activity = st.text_input("직접 입력: 활동 내용", placeholder="예) 사무실 LED 조명 교체", key="act_text")
+        activity = st.text_input("직접 입력: 활동 내용", placeholder="예) 사무실 LED 조명 교체", key="reg_text")
 
-    st.markdown("---")  # 구분선
+    st.markdown("---")
 
-    # 3) 폼: 부서·성명·이미지 등록
+    # 3) CSV 및 이미지 디렉터리 초기화
     img_dir, csv_file = "participation_images", "participation.csv"
-    if not os.path.exists(img_dir):
-        os.makedirs(img_dir)
+    os.makedirs(img_dir, exist_ok=True)
     if not os.path.exists(csv_file):
-        pd.DataFrame(
-            columns=["timestamp","department","name","activity","image_filename"]
-        ).to_csv(csv_file, index=False, encoding="utf-8-sig")
+        pd.DataFrame(columns=["timestamp","department","name","activity","image_filename"])\
+          .to_csv(csv_file, index=False, encoding="utf-8-sig")
 
+    # 4) 등록 폼
     with st.form(key="participation_form", clear_on_submit=True):
         dept   = st.text_input("참여 부서", max_chars=50)
         person = st.text_input("성명", max_chars=30)
@@ -456,24 +455,24 @@ def participation_section():
         elif up_img is None:
             st.warning("이미지를 업로드해 주세요.")
         else:
-            ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-            ext  = os.path.splitext(up_img.name)[1].lower()
-            safe = "".join(person.split())
-            img_fname = f"{ts}_{safe}{ext}"
+            ts        = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ext       = os.path.splitext(up_img.name)[1].lower()
+            safe_name = "".join(person.split())
+            img_fname = f"{ts}_{safe_name}{ext}"
             with open(os.path.join(img_dir, img_fname), "wb") as f:
                 f.write(up_img.getbuffer())
 
             pd.DataFrame([{
-                "timestamp":   datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "department":  dept.strip(),
-                "name":        person.strip(),
-                "activity":    activity.strip(),
+                "timestamp":     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "department":    dept.strip(),
+                "name":          person.strip(),
+                "activity":      activity.strip(),
                 "image_filename": img_fname
             }]).to_csv(csv_file, mode="a", header=False, index=False, encoding="utf-8-sig")
 
             st.success("✅ 참여 정보가 등록되었습니다!")
 
-    # 4) 저장된 데이터 표시 및 관리
+    # 5) 저장된 데이터 로드
     try:
         all_data = pd.read_csv(csv_file, encoding="utf-8-sig")\
                      .sort_values(by="timestamp", ascending=False)
@@ -489,66 +488,91 @@ def participation_section():
 
         st.dataframe(all_data, use_container_width=True)
 
-        # ── 수정 ────────────────────────────────────────────────────────────
+        # 6) 수정 섹션
         with st.expander("✏️ 데이터 수정", expanded=False):
-            if not all_data.empty:
+            if all_data.empty:
+                st.info("수정할 데이터가 없습니다.")
+            else:
                 idx = st.selectbox(
                     "수정할 항목 선택",
                     all_data.index,
                     format_func=lambda i: f"{all_data.loc[i,'timestamp']} / {all_data.loc[i,'name']}"
                 )
                 if idx is not None:
-                    cur_act = all_data.loc[idx,"activity"]
-                    base_idx = BASE_ACTIVITIES.index(cur_act) if cur_act in BASE_ACTIVITIES else len(SEL_OPTIONS)-1
-                    new_dept = st.text_input("부서", value=all_data.loc[idx,"department"], key="edit_dept")
-                    new_name = st.text_input("성명", value=all_data.loc[idx,"name"], key="edit_name")
-                    new_sel  = st.selectbox("활동 항목", SEL_OPTIONS, index=base_idx, key="edit_sel")
-                    new_custom = ""
-                    if new_sel == "직접 입력":
-                        new_custom = st.text_input("직접 입력: 활동 내용", value=cur_act, key="edit_custom")
-                    new_img = st.file_uploader("새 이미지 업로드(선택)", type=["png","jpg","jpeg"], key="edit_img")
+                    cur = all_data.loc[idx]
+                    # 활동 수정 방식
+                    edit_mode = st.radio(
+                        "활동 입력 방식",
+                        ["목록에서 선택", "직접 입력"],
+                        horizontal=True,
+                        key=f"edit_mode_{idx}"
+                    )
+                    if edit_mode == "목록에서 선택":
+                        new_act = st.selectbox(
+                            "활동 항목",
+                            BASE_ACTIVITIES,
+                            index=BASE_ACTIVITIES.index(cur["activity"])
+                                     if cur["activity"] in BASE_ACTIVITIES else 0,
+                            key=f"edit_sel_{idx}"
+                        )
+                    else:
+                        new_act = st.text_input(
+                            "직접 입력: 활동 내용",
+                            value=cur["activity"],
+                            key=f"edit_text_{idx}"
+                        )
 
-                    if st.button("저장", key="save_edit"):
-                        new_act = new_custom.strip() if new_sel == "직접 입력" else new_sel
-                        if not new_act:
+                    new_dept = st.text_input("부서", value=cur["department"], key=f"edit_dept_{idx}")
+                    new_name = st.text_input("성명", value=cur["name"], key=f"edit_name_{idx}")
+                    new_img  = st.file_uploader("새 이미지 업로드(선택)", type=["png","jpg","jpeg"], key=f"edit_img_{idx}")
+
+                    if st.button("저장", key=f"save_edit_{idx}"):
+                        if not new_act.strip():
                             st.warning("활동명을 입력해 주세요.")
                         else:
-                            img_fname = all_data.loc[idx,"image_filename"]
+                            img_fname = cur["image_filename"]
                             if new_img is not None:
+                                # 구 이미지 삭제
                                 old_path = os.path.join(img_dir, img_fname)
                                 if os.path.exists(old_path):
                                     os.remove(old_path)
-                                ext = os.path.splitext(new_img.name)[1].lower()
+                                ext       = os.path.splitext(new_img.name)[1].lower()
                                 img_fname = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{''.join(new_name.split())}{ext}"
                                 with open(os.path.join(img_dir, img_fname), "wb") as f:
                                     f.write(new_img.getbuffer())
-                            all_data.loc[idx, ["department","name","activity","image_filename"]] = \
-                                [new_dept.strip(), new_name.strip(), new_act, img_fname]
+
+                            all_data.loc[idx, ["department","name","activity","image_filename"]] = [
+                                new_dept.strip(), new_name.strip(), new_act.strip(), img_fname
+                            ]
                             all_data.to_csv(csv_file, index=False, encoding="utf-8-sig")
                             st.success("✅ 수정 완료")
                             st.experimental_rerun()
 
-        # ── 삭제 ────────────────────────────────────────────────────────────
+        # 7) 삭제 섹션
         with st.expander("🗑️ 데이터 삭제", expanded=False):
-            if not all_data.empty:
+            if all_data.empty:
+                st.info("삭제할 데이터가 없습니다.")
+            else:
                 del_idxs = st.multiselect(
                     "삭제할 항목 선택",
                     all_data.index,
                     format_func=lambda i: f"{all_data.loc[i,'timestamp']} / {all_data.loc[i,'name']}"
                 )
-                if st.button("삭제", key="delete_rows") and del_idxs:
+                if st.button("삭제", key="delete_rows"):
                     for i in del_idxs:
-                        p = os.path.join(img_dir, all_data.loc[i,"image_filename"])
-                        if os.path.exists(p):
-                            os.remove(p)
+                        # 이미지 파일 삭제
+                        path = os.path.join(img_dir, all_data.loc[i, "image_filename"])
+                        if os.path.exists(path):
+                            os.remove(path)
+                    # CSV 갱신
                     all_data = all_data.drop(del_idxs).reset_index(drop=True)
                     all_data.to_csv(csv_file, index=False, encoding="utf-8-sig")
                     st.success("🗑️ 삭제 완료")
                     st.experimental_rerun()
 
-        # ── 썸네일 + 정보 ───────────────────────────────────────────────────
+        # 8) 썸네일 + 정보 표시
         for _, row in all_data.iterrows():
-            c1, c2 = st.columns([1,4])
+            c1, c2 = st.columns([1, 4])
             with c1:
                 p = os.path.join(img_dir, row["image_filename"])
                 st.image(p if os.path.exists(p) else None, width=80, caption=row["name"])
@@ -557,8 +581,10 @@ def participation_section():
                     f"- **[{row['timestamp']}]** {row['department']} / {row['name']}  \n"
                     f"  🚩 _{row['activity']}_"
                 )
+
     except Exception as e:
         st.error(f"참여 현황 오류: {e}")
+
 
 
 # ─── 7) 영상 모음 섹션 ───────────────────────────────────────────────────────────
