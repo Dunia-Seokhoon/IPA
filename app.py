@@ -57,7 +57,7 @@ def fetch_google_news(keyword: str, max_items: int = 10):
 # ─── 1-A) UI 섹션 ─────────────────────────────────────────────────────────────
 def google_news_section():
     st.subheader("📰 Google News 검색")
-    kw        = st.text_input("키워드", value="카카오")
+    kw        = st.text_input("키워드", value="글로벌 ESG 현황 ")
     max_items = st.slider("가져올 기사 개수", 5, 100, 10)
     if st.button("보기"):
         news = fetch_google_news(kw, max_items)
