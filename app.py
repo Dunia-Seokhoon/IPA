@@ -54,44 +54,58 @@ def fetch_google_news(keyword: str, max_items: int = 10):
     return items
 
 
-# ─── 1-A) UI 섹션 ─────────────────────────────────────────────────────────────
 def google_news_section():
     st.subheader("📰 Google News 검색")
-    kw        = st.text_input("키워드를 입력하세요", value="글로벌 ESG 현황 ")
+    kw        = st.text_input("키워드를 입력하세요", value="글로벌 ESG 현황")
     max_items = st.slider("가져올 기사 개수", 5, 100, 10)
-    if st.button("보기"):
+
+    if st.button("보기", key="news_btn"):
         news = fetch_google_news(kw, max_items)
         if not news:
             st.info("검색 결과가 없습니다.")
             return
 
-        # ① 결과 목록 출력
-        for item in news:
+        # ① 결과 목록
+        for it in news:
             st.markdown(
-                f"- **[{item['source']}] · {item['date']}** "
-                f"[{item['title']}]({item['link']})",
+                f"- **[{it['source']}] · {it['date']}** "
+                f"[{it['title']}]({it['link']})",
                 unsafe_allow_html=True
             )
 
-        # ② 링크 문자열 생성
-        links_str = "\n".join([n["link"] for n in news])
+        # ② 링크 문자열
+        links_str = "\n".join(n["link"] for n in news)
 
-        # ③ 복사용 텍스트 영역 & JS 버튼
-        st.text_area("🔗 링크 일괄 복사용", links_str, height=100)
+        # ③ HTML 삽입 (숨은 textarea + 복사 버튼)
+        components.html(
+            f"""
+            <textarea id="linksArea" style="opacity:0;position:absolute;left:-9999px;">
+{links_str}
+            </textarea>
+            <button id="copyBtn"
+                    style="margin-top:8px;padding:6px 12px;
+                           background:#f44336;color:#fff;border:none;border-radius:4px;
+                           cursor:pointer;font-weight:bold;">
+                📋 {len(news)}개 링크 복사
+            </button>
 
-        # copy-to-clipboard 버튼 (JS)
-        btn_html = f"""
-        <button id="copy-btn"
-                style="margin-top:6px;padding:6px 12px;background:#f44336;
-                       color:white;border:none;border-radius:4px;cursor:pointer;"
-                onclick="navigator.clipboard.writeText(`{links_str}`); 
-                         var t=this.innerText; this.innerText='✅ 복사 완료!';
-                         setTimeout(()=>this.innerText=t, 1500);">
-            📋 {len(news)}개 링크 복사
-        </button>
-        """
-        st.markdown(btn_html, unsafe_allow_html=True)
+            <script>
+            const btn  = document.getElementById("copyBtn");
+            const area = document.getElementById("linksArea");
+            btn.onclick = () => {{
+                area.select();                          // 1) 텍스트 선택
+                document.execCommand("copy");           // 2) 복사
+                const old = btn.innerText;
+                btn.innerText = "✅ 복사 완료!";
+                setTimeout(()=>btn.innerText = old, 1500);
+            }};
+            </script>
+            """,
+            height=50,          # 버튼만 보이므로 50px 정도면 충분
+        )
 
+        # ④ 참고용 텍스트 영역(선택 사항)
+        st.text_area("🔗 링크 미리보기", links_str, height=100)
 
 # ─── 2) 선박 관제정보 조회 섹션 ────────────────────────────────────────────────
 def vessel_monitoring_section():
