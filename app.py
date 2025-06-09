@@ -403,22 +403,7 @@ def comments_section():
 def participation_section():
     st.subheader("🖊️ ESG 활동 참여")
 
-    img_dir, csv_file = "participation_images", "participation.csv"
-    os.makedirs(img_dir, exist_ok=True)
-
-    # ── 0) 기존 CSV 헤더 순서 자동 교정 ─────────────────────────────────────────
-    if os.path.exists(csv_file):
-        # 첫 줄(헤더)만 읽어서 순서를 확인
-        with open(csv_file, encoding="utf-8-sig") as f:
-            header = f.readline().strip().split(",")
-        # 잘못된 순서일 때 (old: …,image_filename,activity)
-        if header == ["timestamp","department","name","image_filename","activity"]:
-            df_bad = pd.read_csv(csv_file, encoding="utf-8-sig")
-            # 컬럼 이름을 새 순서로 재부여: activity↔image_filename 교환
-            df_bad.columns = ["timestamp","department","name","activity","image_filename"]
-            df_bad.to_csv(csv_file, index=False, encoding="utf-8-sig")
-
-    # ── 1) 항목 목록 ─────────────────────────────────────────────────────────
+    # ── 1) 항목 목록 ────────────────────────────────────────────────────────────
     BASE_ACTIVITIES = [
         "개인 텀블러·머그잔 사용",
         "종이 대신 디지털 문서 활용",
@@ -432,13 +417,21 @@ def participation_section():
         "사내 일회용품 사용 줄이기",
     ]
 
-    # ── 2) CSV 파일 없으면 헤더 생성 ─────────────────────────────────────────────
-    if not os.path.exists(csv_file):
-        pd.DataFrame(columns=[
-            "timestamp","department","name","activity","image_filename"
-        ]).to_csv(csv_file, index=False, encoding="utf-8-sig")
+    img_dir, csv_file = "participation_images", "participation.csv"
+    os.makedirs(img_dir, exist_ok=True)
 
-    # ── 3) 활동 입력 방식 선택 (폼 밖) ───────────────────────────────────────
+    # ── 2) CSV 헤더 순서 교정 ────────────────────────────────────────────────────
+    expected_cols = ["timestamp","department","name","activity","image_filename"]
+    if os.path.exists(csv_file):
+        df0 = pd.read_csv(csv_file, nrows=0, encoding="utf-8-sig")
+        if list(df0.columns) != expected_cols and set(df0.columns) == set(expected_cols):
+            df_bad = pd.read_csv(csv_file, encoding="utf-8-sig")
+            df_bad = df_bad[expected_cols]
+            df_bad.to_csv(csv_file, index=False, encoding="utf-8-sig")
+    else:
+        pd.DataFrame(columns=expected_cols).to_csv(csv_file, index=False, encoding="utf-8-sig")
+
+    # ── 3) 활동 입력 방식 (폼 밖) ───────────────────────────────────────────────
     mode = st.radio(
         "활동 입력 방식",
         ["목록에서 선택", "직접 입력"],
@@ -448,11 +441,11 @@ def participation_section():
     if mode == "목록에서 선택":
         activity = st.selectbox("기본 활동 항목 중 선택", BASE_ACTIVITIES, key="reg_select")
     else:
-        activity = st.text_input("직접 입력: 활동 내용", placeholder="예) 사무실 LED 교체", key="reg_text")
+        activity = st.text_input("직접 입력: 활동 내용", placeholder="예) 사무실 LED 조명 교체", key="reg_text")
 
     st.markdown("---")
 
-    # ── 4) 신규 등록 폼 ─────────────────────────────────────────────────────
+    # ── 4) 신규 등록 폼 ─────────────────────────────────────────────────────────
     with st.form(key="participation_form", clear_on_submit=True):
         dept      = st.text_input("참여 부서", max_chars=50)
         person    = st.text_input("성명", max_chars=30)
@@ -473,9 +466,11 @@ def participation_section():
             ext       = os.path.splitext(up_img.name)[1].lower()
             safe_name = "".join(person.split())
             img_fname = f"{ts}_{safe_name}{ext}"
+            # 이미지 저장
             with open(os.path.join(img_dir, img_fname), "wb") as f:
                 f.write(up_img.getbuffer())
 
+            # CSV에 올바른 순서로 기록
             pd.DataFrame([{
                 "timestamp":     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "department":    dept.strip(),
@@ -484,12 +479,14 @@ def participation_section():
                 "image_filename": img_fname
             }]).to_csv(csv_file, mode="a", header=False, index=False,
                        encoding="utf-8-sig")
+
             st.success("✅ 참여 정보가 등록되었습니다!")
 
-    # ── 5) 데이터 로드 및 표시 ─────────────────────────────────────────────────
+    # ── 5) 저장된 데이터 로드 및 표시 ─────────────────────────────────────────
     try:
-        all_data = pd.read_csv(csv_file, encoding="utf-8-sig")\
-                     .sort_values(by="timestamp", ascending=False).reset_index(drop=True)
+        all_data = pd.read_csv(csv_file, encoding="utf-8-sig")
+        all_data = all_data.loc[:, expected_cols]  # 순서 보장
+        all_data = all_data.sort_values(by="timestamp", ascending=False).reset_index(drop=True)
 
         # 다운로드 링크
         b64 = base64.b64encode(
@@ -499,9 +496,10 @@ def participation_section():
             f'<a href="data:file/csv;base64,{b64}" download="participation.csv">📥 CSV 다운로드</a>',
             unsafe_allow_html=True
         )
+
         st.dataframe(all_data, use_container_width=True)
 
-        # ── 6) 수정 섹션 ─────────────────────────────────────────────────────
+        # ── 6) 데이터 수정(expander) ───────────────────────────────────────────
         with st.expander("✏️ 데이터 수정", expanded=False):
             if all_data.empty:
                 st.info("수정할 데이터가 없습니다.")
@@ -545,6 +543,7 @@ def participation_section():
                         else:
                             img_fname = cur["image_filename"]
                             if new_img is not None:
+                                # 구 이미지 삭제
                                 old_p = os.path.join(img_dir, img_fname)
                                 if os.path.exists(old_p):
                                     os.remove(old_p)
@@ -553,6 +552,7 @@ def participation_section():
                                 with open(os.path.join(img_dir, img_fname), "wb") as f:
                                     f.write(new_img.getbuffer())
 
+                            # 수정된 내용 덮어쓰기 (activity 컬럼도 제대로 변경)
                             all_data.loc[idx, ["department","name","activity","image_filename"]] = [
                                 new_dept.strip(), new_name.strip(), new_act.strip(), img_fname
                             ]
@@ -560,7 +560,7 @@ def participation_section():
                             st.success("✅ 수정 완료")
                             st.experimental_rerun()
 
-        # ── 7) 삭제 섹션 ─────────────────────────────────────────────────────
+        # ── 7) 데이터 삭제(expander) ────────────────────────────────────────────
         with st.expander("🗑️ 데이터 삭제", expanded=False):
             if all_data.empty:
                 st.info("삭제할 데이터가 없습니다.")
@@ -580,12 +580,13 @@ def participation_section():
                     st.success("🗑️ 삭제 완료")
                     st.experimental_rerun()
 
-        # ── 8) 썸네일 + 정보 표시 ─────────────────────────────────────────────
+        # ── 8) 썸네일 + 정보 표시 ───────────────────────────────────────────────
         for _, row in all_data.iterrows():
             c1, c2 = st.columns([1, 4])
             with c1:
-                p = os.path.join(img_dir, row["image_filename"])
-                st.image(p if os.path.exists(p) else None, width=80, caption=row["name"])
+                img_path = os.path.join(img_dir, row["image_filename"])
+                st.image(img_path if os.path.exists(img_path) else None,
+                         width=80, caption=row["name"])
             with c2:
                 st.write(
                     f"- **[{row['timestamp']}]** {row['department']} / {row['name']}  \n"
