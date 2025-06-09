@@ -260,7 +260,7 @@ def summarize_history(history: list) -> str:
     return res.choices[0].message.content.strip()
 
 def chatgpt_clone_section():
-    st.subheader("💬 Chatbot (Vision)")
+    st.subheader("💬 Chatbot (gpt-4o)")
 
     # ── 상태 초기화 ───────────────────────────────────────────────────────
     st.session_state.setdefault("chat_history",  [])  # UI 표시용(모두 저장)
