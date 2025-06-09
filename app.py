@@ -90,7 +90,8 @@ def google_news_section():
             📋 {len(news)}개 링크 복사
         </button>
         """
-        st.markdown(btn_html, unsafe_allow_html=True
+        st.markdown(btn_html, unsafe_allow_html=True)
+
 
 # ─── 2) 선박 관제정보 조회 섹션 ────────────────────────────────────────────────
 def vessel_monitoring_section():
