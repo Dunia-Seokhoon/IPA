@@ -65,7 +65,7 @@ def google_news_section():
             st.info("검색 결과가 없습니다.")
             return
 
-        # ① 결과 목록
+        # ① 결과 목록 (화면용)
         for it in news:
             st.markdown(
                 f"- **[{it['source']}] · {it['date']}** "
@@ -73,10 +73,15 @@ def google_news_section():
                 unsafe_allow_html=True
             )
 
-        # ② 링크 문자열
-        links_str = "\n".join(n["link"] for n in news)
+        # ② “번호. 제목 | 링크” 형식으로 문자열 생성
+        links_str = "\n".join(
+            f"{i+1}. {n['title']} | {n['link']}"
+            for i, n in enumerate(news)
+        )
+        # 슬래시로 이어붙이고 싶다면:
+        # links_str = links_str.replace("\n", " / ")
 
-        # ③ HTML 삽입 (숨은 textarea + 복사 버튼)
+        # ③ 숨은 textarea + 복사 버튼
         components.html(
             f"""
             <textarea id="linksArea" style="opacity:0;position:absolute;left:-9999px;">
@@ -88,25 +93,23 @@ def google_news_section():
                            cursor:pointer;font-weight:bold;">
                 📋 {len(news)}개 링크 복사
             </button>
-
             <script>
             const btn  = document.getElementById("copyBtn");
             const area = document.getElementById("linksArea");
             btn.onclick = () => {{
-                area.select();                          // 1) 텍스트 선택
-                document.execCommand("copy");           // 2) 복사
+                area.select();
+                document.execCommand("copy");
                 const old = btn.innerText;
                 btn.innerText = "✅ 복사 완료!";
                 setTimeout(()=>btn.innerText = old, 1500);
             }};
             </script>
             """,
-            height=50,          # 버튼만 보이므로 50px 정도면 충분
+            height=50,
         )
 
-        # ④ 참고용 텍스트 영역(선택 사항)
-        st.text_area("🔗 링크 미리보기", links_str, height=100)
-
+        # ④ 미리보기(선택)
+        st.text_area("🔗 링크 미리보기", links_str, height=120)
 # ─── 2) 선박 관제정보 조회 섹션 ────────────────────────────────────────────────
 def vessel_monitoring_section():
     st.subheader("🚢 해양수산부 선박 관제정보 조회")
