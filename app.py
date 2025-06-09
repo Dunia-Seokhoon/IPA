@@ -557,6 +557,7 @@ tabs = st.tabs([
 ])
 
 with tabs[0]:
+    google_news_section()   # 👈 딱 한 줄!
     st.subheader("▶ 구글 뉴스 검색")
     kw  = st.text_input("검색할 키워드를 입력하세요", "글로벌 ESG 현황")
     num = st.slider("가져올 기사 개수", 5, 100, 10)
