@@ -399,10 +399,11 @@ def comments_section():
         st.error(f"댓글을 불러오는 중 오류가 발생했습니다: {e}")
 
 # ─── 6) ESG 활동 참여 ─────────────────────────────────────────────────────────
+# ─── 6) ESG 활동 참여 ─────────────────────────────────────────────────────────
 def participation_section():
     st.subheader("🖊️ ESG 활동 참여")
 
-    # 기본 10개 + 직접 입력 옵션
+    # 1) 기본 10개 목록
     BASE_ACTIVITIES = [
         "개인 텀블러·머그잔 사용",
         "종이 대신 디지털 문서 활용",
@@ -415,60 +416,76 @@ def participation_section():
         "탄소배출 표시·친환경 배송 서비스 이용",
         "사내 일회용품 사용 줄이기",
     ]
-    SEL_OPTIONS = BASE_ACTIVITIES + ["직접 입력"]
 
+    # 2) 입력 방식 선택 (폼 밖)
+    mode = st.radio(
+        "활동 입력 방식",
+        ["목록에서 선택", "직접 입력"],
+        horizontal=True,
+        key="act_mode"
+    )
+    if mode == "목록에서 선택":
+        activity = st.selectbox("기본 활동 항목 중 선택", BASE_ACTIVITIES, key="act_select")
+    else:
+        activity = st.text_input("직접 입력: 활동 내용", placeholder="예) 사무실 LED 조명 교체", key="act_text")
+
+    st.markdown("---")  # 구분선
+
+    # 3) 폼: 부서·성명·이미지 등록
     img_dir, csv_file = "participation_images", "participation.csv"
     if not os.path.exists(img_dir):
         os.makedirs(img_dir)
     if not os.path.exists(csv_file):
-        pd.DataFrame(columns=["timestamp","department","name","activity","image_filename"])\
-          .to_csv(csv_file, index=False, encoding="utf-8-sig")
+        pd.DataFrame(
+            columns=["timestamp","department","name","activity","image_filename"]
+        ).to_csv(csv_file, index=False, encoding="utf-8-sig")
 
-    # ── 신규 등록 ────────────────────────────────────────────────────────────
     with st.form(key="participation_form", clear_on_submit=True):
         dept   = st.text_input("참여 부서", max_chars=50)
         person = st.text_input("성명", max_chars=30)
-        act_sel = st.selectbox("ESG 활동 항목 선택", SEL_OPTIONS)
-        act_custom = ""
-        if act_sel == "직접 입력":
-            act_custom = st.text_input("직접 입력: 활동 내용", max_chars=100)
         up_img = st.file_uploader("증명자료(이미지)", type=["png","jpg","jpeg"])
+        submitted = st.form_submit_button("제출")
 
-        if st.form_submit_button("제출"):
-            activity = act_custom.strip() if act_sel == "직접 입력" else act_sel
-            if not dept.strip():
-                st.warning("참여 부서를 입력해 주세요.")
-            elif not person.strip():
-                st.warning("성명을 입력해 주세요.")
-            elif not activity:
-                st.warning("활동명을 입력해 주세요.")
-            elif up_img is None:
-                st.warning("이미지를 업로드해 주세요.")
-            else:
-                ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
-                ext  = os.path.splitext(up_img.name)[1].lower()
-                safe = "".join(person.split())
-                img_fname = f"{ts}_{safe}{ext}"
-                with open(os.path.join(img_dir, img_fname), "wb") as f:
-                    f.write(up_img.getbuffer())
-                pd.DataFrame([{
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "department": dept.strip(),
-                    "name": person.strip(),
-                    "activity": activity,
-                    "image_filename": img_fname
-                }]).to_csv(csv_file, mode="a", header=False, index=False, encoding="utf-8-sig")
-                st.success("✅ 참여 정보가 등록되었습니다!")
+    if submitted:
+        if not dept.strip():
+            st.warning("참여 부서를 입력해 주세요.")
+        elif not person.strip():
+            st.warning("성명을 입력해 주세요.")
+        elif not activity.strip():
+            st.warning("활동 내용을 입력해 주세요.")
+        elif up_img is None:
+            st.warning("이미지를 업로드해 주세요.")
+        else:
+            ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ext  = os.path.splitext(up_img.name)[1].lower()
+            safe = "".join(person.split())
+            img_fname = f"{ts}_{safe}{ext}"
+            with open(os.path.join(img_dir, img_fname), "wb") as f:
+                f.write(up_img.getbuffer())
 
-    # ── 데이터 표시/관리 ─────────────────────────────────────────────────────
+            pd.DataFrame([{
+                "timestamp":   datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "department":  dept.strip(),
+                "name":        person.strip(),
+                "activity":    activity.strip(),
+                "image_filename": img_fname
+            }]).to_csv(csv_file, mode="a", header=False, index=False, encoding="utf-8-sig")
+
+            st.success("✅ 참여 정보가 등록되었습니다!")
+
+    # 4) 저장된 데이터 표시 및 관리
     try:
         all_data = pd.read_csv(csv_file, encoding="utf-8-sig")\
                      .sort_values(by="timestamp", ascending=False)
 
         # 다운로드 링크
-        b64 = base64.b64encode(all_data.to_csv(index=False, encoding="utf-8-sig").encode()).decode()
-        st.markdown(f'<a href="data:file/csv;base64,{b64}" download="participation.csv">📥 CSV 다운로드</a>',
-                    unsafe_allow_html=True)
+        b64 = base64.b64encode(
+            all_data.to_csv(index=False, encoding="utf-8-sig").encode()
+        ).decode()
+        st.markdown(
+            f'<a href="data:file/csv;base64,{b64}" download="participation.csv">📥 CSV 다운로드</a>',
+            unsafe_allow_html=True
+        )
 
         st.dataframe(all_data, use_container_width=True)
 
