@@ -398,11 +398,10 @@ def comments_section():
     except Exception as e:
         st.error(f"댓글을 불러오는 중 오류가 발생했습니다: {e}")
 
-# ─── 6) ESG 활동 참여 ─────────────────────────────────────────────────────────
 def participation_section():
     st.subheader("🖊️ ESG 활동 참여")
 
-    # 1) 항목 목록 및 옵션
+    # ── 1) 항목 목록 ────────────────────────────────────────────────────────
     BASE_ACTIVITIES = [
         "개인 텀블러·머그잔 사용",
         "종이 대신 디지털 문서 활용",
@@ -415,9 +414,15 @@ def participation_section():
         "탄소배출 표시·친환경 배송 서비스 이용",
         "사내 일회용품 사용 줄이기",
     ]
-    SEL_OPTIONS = BASE_ACTIVITIES + ["직접 입력"]
 
-    # 2) 신규 등록용 입력 (폼 밖)
+    # ── 2) CSV 초기화 ───────────────────────────────────────────────────────
+    img_dir, csv_file = "participation_images", "participation.csv"
+    os.makedirs(img_dir, exist_ok=True)
+    if not os.path.exists(csv_file):
+        pd.DataFrame(columns=["timestamp","department","name","activity","image_filename"]) \
+          .to_csv(csv_file, index=False, encoding="utf-8-sig")
+
+    # ── 3) 활동 입력 방식 (폼 밖) ───────────────────────────────────────────
     mode = st.radio(
         "활동 입력 방식",
         ["목록에서 선택", "직접 입력"],
@@ -431,18 +436,11 @@ def participation_section():
 
     st.markdown("---")
 
-    # 3) CSV 및 이미지 디렉터리 초기화
-    img_dir, csv_file = "participation_images", "participation.csv"
-    os.makedirs(img_dir, exist_ok=True)
-    if not os.path.exists(csv_file):
-        pd.DataFrame(columns=["timestamp","department","name","activity","image_filename"])\
-          .to_csv(csv_file, index=False, encoding="utf-8-sig")
-
-    # 4) 등록 폼
+    # ── 4) 신규 등록 폼 ─────────────────────────────────────────────────────
     with st.form(key="participation_form", clear_on_submit=True):
-        dept   = st.text_input("참여 부서", max_chars=50)
-        person = st.text_input("성명", max_chars=30)
-        up_img = st.file_uploader("증명자료(이미지)", type=["png","jpg","jpeg"])
+        dept      = st.text_input("참여 부서", max_chars=50)
+        person    = st.text_input("성명", max_chars=30)
+        up_img    = st.file_uploader("증명자료(이미지)", type=["png","jpg","jpeg"])
         submitted = st.form_submit_button("제출")
 
     if submitted:
@@ -472,10 +470,14 @@ def participation_section():
 
             st.success("✅ 참여 정보가 등록되었습니다!")
 
-    # 5) 저장된 데이터 로드
+    # ── 5) 저장된 데이터 로드 ─────────────────────────────────────────────────
     try:
-        all_data = pd.read_csv(csv_file, encoding="utf-8-sig")\
-                     .sort_values(by="timestamp", ascending=False)
+        all_data = pd.read_csv(csv_file, encoding="utf-8-sig")
+        # 이전 CSV에 activity 컬럼이 없다면 빈 문자열로 채워 줌
+        if "activity" not in all_data.columns:
+            all_data["activity"] = ""
+
+        all_data = all_data.sort_values(by="timestamp", ascending=False).reset_index(drop=True)
 
         # 다운로드 링크
         b64 = base64.b64encode(
@@ -488,7 +490,7 @@ def participation_section():
 
         st.dataframe(all_data, use_container_width=True)
 
-        # 6) 수정 섹션
+        # ── 6) 데이터 수정 ────────────────────────────────────────────────────
         with st.expander("✏️ 데이터 수정", expanded=False):
             if all_data.empty:
                 st.info("수정할 데이터가 없습니다.")
@@ -532,10 +534,9 @@ def participation_section():
                         else:
                             img_fname = cur["image_filename"]
                             if new_img is not None:
-                                # 구 이미지 삭제
-                                old_path = os.path.join(img_dir, img_fname)
-                                if os.path.exists(old_path):
-                                    os.remove(old_path)
+                                old_p = os.path.join(img_dir, img_fname)
+                                if os.path.exists(old_p):
+                                    os.remove(old_p)
                                 ext       = os.path.splitext(new_img.name)[1].lower()
                                 img_fname = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{''.join(new_name.split())}{ext}"
                                 with open(os.path.join(img_dir, img_fname), "wb") as f:
@@ -548,7 +549,7 @@ def participation_section():
                             st.success("✅ 수정 완료")
                             st.experimental_rerun()
 
-        # 7) 삭제 섹션
+        # ── 7) 데이터 삭제 ────────────────────────────────────────────────────
         with st.expander("🗑️ 데이터 삭제", expanded=False):
             if all_data.empty:
                 st.info("삭제할 데이터가 없습니다.")
@@ -560,17 +561,15 @@ def participation_section():
                 )
                 if st.button("삭제", key="delete_rows"):
                     for i in del_idxs:
-                        # 이미지 파일 삭제
-                        path = os.path.join(img_dir, all_data.loc[i, "image_filename"])
-                        if os.path.exists(path):
-                            os.remove(path)
-                    # CSV 갱신
+                        p = os.path.join(img_dir, all_data.loc[i,"image_filename"])
+                        if os.path.exists(p):
+                            os.remove(p)
                     all_data = all_data.drop(del_idxs).reset_index(drop=True)
                     all_data.to_csv(csv_file, index=False, encoding="utf-8-sig")
                     st.success("🗑️ 삭제 완료")
                     st.experimental_rerun()
 
-        # 8) 썸네일 + 정보 표시
+        # ── 8) 썸네일 + 정보 표시 ─────────────────────────────────────────────
         for _, row in all_data.iterrows():
             c1, c2 = st.columns([1, 4])
             with c1:
@@ -584,6 +583,7 @@ def participation_section():
 
     except Exception as e:
         st.error(f"참여 현황 오류: {e}")
+
 
 
 
