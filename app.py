@@ -38,10 +38,10 @@ HF_API_URL   = os.getenv("HF_API_URL")
 @st.cache_data(ttl=300)
 def fetch_google_news(keyword: str, max_items: int = 10):
     clean_kw = " ".join(keyword.strip().split())
-    params = {"q": clean_kw, "hl": "ko", "gl": "KR", "ceid": "KR:ko"}
-    rss_url = "https://news.google.com/rss/search?" + urlencode(params, doseq=True)
-    feed = feedparser.parse(rss_url)
-    items = []
+    params   = {"q": clean_kw, "hl": "ko", "gl": "KR", "ceid": "KR:ko"}
+    rss_url  = "https://news.google.com/rss/search?" + urlencode(params, doseq=True)
+    feed     = feedparser.parse(rss_url)
+    items    = []
     for entry in feed.entries[:max_items]:
         pub_date = datetime(*entry.published_parsed[:6]).strftime("%Y-%m-%d")
         source   = entry.get("source", {}).get("title", "")
@@ -52,6 +52,45 @@ def fetch_google_news(keyword: str, max_items: int = 10):
             "date":   pub_date,
         })
     return items
+
+
+# ─── 1-A) UI 섹션 ─────────────────────────────────────────────────────────────
+def google_news_section():
+    st.subheader("📰 Google News 검색")
+    kw        = st.text_input("키워드", value="카카오")
+    max_items = st.slider("가져올 기사 개수", 5, 100, 10)
+    if st.button("보기"):
+        news = fetch_google_news(kw, max_items)
+        if not news:
+            st.info("검색 결과가 없습니다.")
+            return
+
+        # ① 결과 목록 출력
+        for item in news:
+            st.markdown(
+                f"- **[{item['source']}] · {item['date']}** "
+                f"[{item['title']}]({item['link']})",
+                unsafe_allow_html=True
+            )
+
+        # ② 링크 문자열 생성
+        links_str = "\n".join([n["link"] for n in news])
+
+        # ③ 복사용 텍스트 영역 & JS 버튼
+        st.text_area("🔗 링크 일괄 복사용", links_str, height=100)
+
+        # copy-to-clipboard 버튼 (JS)
+        btn_html = f"""
+        <button id="copy-btn"
+                style="margin-top:6px;padding:6px 12px;background:#f44336;
+                       color:white;border:none;border-radius:4px;cursor:pointer;"
+                onclick="navigator.clipboard.writeText(`{links_str}`); 
+                         var t=this.innerText; this.innerText='✅ 복사 완료!';
+                         setTimeout(()=>this.innerText=t, 1500);">
+            📋 {len(news)}개 링크 복사
+        </button>
+        """
+        st.markdown(btn_html, unsafe_allow_html=True
 
 # ─── 2) 선박 관제정보 조회 섹션 ────────────────────────────────────────────────
 def vessel_monitoring_section():
