@@ -208,7 +208,7 @@ def today_weather_section():
         st.markdown(f"**날씨 상태:** {desc}")
 
 
-# ─── 4) Chatbot (Vision) & 요약 기능 ─────────────────────────────────────────
+# ─── 4) Chatbot (gpt-4o) & 요약 기능 ─────────────────────────────────────────
 enc = tiktoken.encoding_for_model("gpt-4o")
 MAX_TOKENS        = 262_144        # gpt-4o 허용치
 SUMMARY_THRESHOLD = 40             # 요약 트리거 턴 수
