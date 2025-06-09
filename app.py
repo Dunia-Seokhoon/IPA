@@ -341,93 +341,140 @@ def comments_section():
         st.error(f"댓글을 불러오는 중 오류가 발생했습니다: {e}")
 
 # ─── 6) “ESG 활동 참여” 섹션 ─────────────────────────────────────────────────────────
-def get_table_download_link(df: pd.DataFrame, filename: str = "participation.csv"):
-    """
-    pandas DataFrame을 CSV로 변환 후, Streamlit 다운로드 링크 HTML 생성
-    """
-    csv = df.to_csv(index=False, encoding="utf-8-sig")
-    b64 = base64.b64encode(csv.encode()).decode()  # 바이너리 데이터를 base64로 인코딩
-    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">📥 CSV 다운로드</a>'
-    return href
-
 def participation_section():
     st.subheader("🖊️ ESG 활동 참여")
-    img_dir = "participation_images"
+    img_dir  = "participation_images"
     csv_file = "participation.csv"
 
-    # 1) 디렉터리 및 CSV 파일이 없으면 생성
+    # ── 1) 디렉터리·CSV 초기화 ───────────────────────────────────────────────
     if not os.path.exists(img_dir):
         os.makedirs(img_dir)
     if not os.path.exists(csv_file):
-        df_init = pd.DataFrame(columns=["timestamp", "department", "name", "image_filename"])
-        df_init.to_csv(csv_file, index=False, encoding="utf-8-sig")
+        pd.DataFrame(columns=["timestamp", "department", "name",
+                              "image_filename"]).to_csv(csv_file,
+                                                        index=False,
+                                                        encoding="utf-8-sig")
 
-    # 2) Streamlit form 생성 (부서, 성명, 이미지)
+    # ── 2) 신규 등록 폼 ────────────────────────────────────────────────────
     with st.form(key="participation_form", clear_on_submit=True):
-        dept = st.text_input("참여 부서", max_chars=50, help="예: 물류팀, 영업부 등")
-        person = st.text_input("성명", max_chars=30)
-        uploaded_file = st.file_uploader("증명자료(이미지)", type=["png", "jpg", "jpeg"])
+        dept          = st.text_input("참여 부서", max_chars=50)
+        person        = st.text_input("성명",       max_chars=30)
+        uploaded_file = st.file_uploader("증명자료(이미지)",
+                                         type=["png", "jpg", "jpeg"])
         submit_button = st.form_submit_button("제출")
 
-    # 3) 제출 버튼이 눌리면 로컬에 저장 후 CSV에 기록
     if submit_button:
         if not dept.strip():
             st.warning("참여 부서를 입력해 주세요.")
         elif not person.strip():
             st.warning("성명을 입력해 주세요.")
         elif uploaded_file is None:
-            st.warning("이미지 파일을 업로드해 주세요.")
+            st.warning("이미지를 업로드해 주세요.")
         else:
-            # 타임스탬프 생성
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            ext = os.path.splitext(uploaded_file.name)[1].lower()  # 예: ".jpg"
-            safe_person = "".join(person.split())  # 공백 제거
-            img_filename = f"{ts}_{safe_person}{ext}"
-            img_path = os.path.join(img_dir, img_filename)
+            ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ext        = os.path.splitext(uploaded_file.name)[1].lower()
+            safe_name  = "".join(person.split())
+            img_fname  = f"{ts}_{safe_name}{ext}"
+            img_path   = os.path.join(img_dir, img_fname)
 
-            # 이미지 로컬에 저장
             with open(img_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
-            # CSV에 새로운 행 추가
-            new_row = pd.DataFrame([{
+            pd.DataFrame([{
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "department": dept.strip(),
                 "name": person.strip(),
-                "image_filename": img_filename
-            }])
-            new_row.to_csv(csv_file, mode="a", header=False, index=False, encoding="utf-8-sig")
-
+                "image_filename": img_fname
+            }]).to_csv(csv_file, mode="a", header=False, index=False,
+                       encoding="utf-8-sig")
             st.success("✅ 참여 정보가 등록되었습니다!")
 
-    # 4) 저장된 CSV 불러와 DataFrame으로 읽기
+    # ── 3) 데이터 로드 ─────────────────────────────────────────────────────
     try:
-        all_data = pd.read_csv(csv_file, encoding="utf-8-sig").sort_values(
-            by="timestamp", ascending=False
-        )
+        all_data = pd.read_csv(csv_file, encoding="utf-8-sig")\
+                     .sort_values(by="timestamp", ascending=False)
 
-        # 4-1) CSV 다운로드 링크 표시
-        st.markdown(
-            get_table_download_link(all_data, filename="participation.csv"),
-            unsafe_allow_html=True
-        )
+        # 3-1) CSV 다운로드 링크
+        def get_table_download_link(df, filename="participation.csv"):
+            csv = df.to_csv(index=False, encoding="utf-8-sig")
+            b64 = base64.b64encode(csv.encode()).decode()
+            return f'<a href="data:file/csv;base64,{b64}" download="{filename}">📥 CSV 다운로드</a>'
+        st.markdown(get_table_download_link(all_data), unsafe_allow_html=True)
 
-        # 4-2) 화면에 표로 출력
-        st.dataframe(all_data)
+        # 3-2) 표 표시
+        st.dataframe(all_data, use_container_width=True)
 
-        # 4-3) 이미지 썸네일 + 부서/성명 출력
+        # 3-3) 수정 구역 ───────────────────────────────────────────────────
+        with st.expander("✏️ 데이터 수정", expanded=False):
+            if all_data.empty:
+                st.info("수정할 데이터가 없습니다.")
+            else:
+                row_idx = st.selectbox(
+                    "수정할 항목 선택",
+                    all_data.index,
+                    format_func=lambda i: f"{all_data.loc[i,'timestamp']} / {all_data.loc[i,'name']}"
+                )
+                if row_idx is not None:
+                    # 현재 값 표시
+                    new_dept = st.text_input("부서", value=all_data.loc[row_idx, "department"], key="edit_dept")
+                    new_name = st.text_input("성명", value=all_data.loc[row_idx, "name"],       key="edit_name")
+                    new_img  = st.file_uploader("새 이미지 업로드(선택)", type=["png","jpg","jpeg"], key="edit_img")
+
+                    if st.button("저장", key="save_edit"):
+                        # 이미지 교체(선택)
+                        img_fname = all_data.loc[row_idx, "image_filename"]
+                        if new_img is not None:
+                            # 기존 파일 제거
+                            old_path = os.path.join(img_dir, img_fname)
+                            if os.path.exists(old_path):
+                                os.remove(old_path)
+
+                            ext = os.path.splitext(new_img.name)[1].lower()
+                            img_fname = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{''.join(new_name.split())}{ext}"
+                            with open(os.path.join(img_dir, img_fname), "wb") as f:
+                                f.write(new_img.getbuffer())
+
+                        # DataFrame 갱신
+                        all_data.loc[row_idx, ["department","name","image_filename"]] = \
+                            [new_dept.strip(), new_name.strip(), img_fname]
+                        all_data.to_csv(csv_file, index=False, encoding="utf-8-sig")
+                        st.success("✅ 수정이 완료되었습니다.")
+                        st.experimental_rerun()
+
+        # 3-4) 삭제 구역 ───────────────────────────────────────────────────
+        with st.expander("🗑️ 데이터 삭제", expanded=False):
+            if all_data.empty:
+                st.info("삭제할 데이터가 없습니다.")
+            else:
+                del_rows = st.multiselect(
+                    "삭제할 항목 선택(복수 선택 가능)",
+                    all_data.index,
+                    format_func=lambda i: f"{all_data.loc[i,'timestamp']} / {all_data.loc[i,'name']}"
+                )
+                if st.button("삭제", key="delete_rows") and del_rows:
+                    # 선택 행 이미지 파일 삭제
+                    for idx in del_rows:
+                        img_path = os.path.join(img_dir, all_data.loc[idx, "image_filename"])
+                        if os.path.exists(img_path):
+                            os.remove(img_path)
+                    # DataFrame 갱신
+                    all_data = all_data.drop(del_rows).reset_index(drop=True)
+                    all_data.to_csv(csv_file, index=False, encoding="utf-8-sig")
+                    st.success("🗑️ 선택한 항목이 삭제되었습니다.")
+                    st.experimental_rerun()
+
+        # 3-5) 썸네일 출력
         for _, row in all_data.iterrows():
-            col1, col2 = st.columns([1, 3])
+            col1, col2 = st.columns([1,3])
             with col1:
-                img_path = os.path.join(img_dir, row["image_filename"])
-                if os.path.exists(img_path):
-                    st.image(img_path, width=80)
-                else:
-                    st.write("(이미지 없음)")
+                path = os.path.join(img_dir, row["image_filename"])
+                st.image(path if os.path.exists(path) else None, width=80, caption=row["name"])
             with col2:
                 st.write(f"- **[{row['timestamp']}]** {row['department']} / {row['name']}")
+
     except Exception as e:
         st.error(f"참여 현황을 불러오는 중 오류가 발생했습니다: {e}")
+
 
 # ─── 7) 영상 모음 섹션 ───────────────────────────────────────────────────────────
 def video_collection_section():
