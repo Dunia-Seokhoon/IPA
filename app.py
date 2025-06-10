@@ -488,6 +488,11 @@ def participation_section():
         all_data = all_data.loc[:, expected_cols]  # 순서 보장
         all_data = all_data.sort_values(by="timestamp", ascending=False).reset_index(drop=True)
 
+        # 이번주의 우수 ESG 사원 (가장 많이 등록한 이름)
+        if not all_data.empty:
+            top_name = all_data["name"].value_counts().idxmax()
+            st.markdown(f"### 🏆 이번주의 우수 ESG 사원: **{top_name}**")
+
         # 다운로드 링크
         b64 = base64.b64encode(
             all_data.to_csv(index=False, encoding="utf-8-sig").encode()
@@ -498,6 +503,8 @@ def participation_section():
         )
 
         st.dataframe(all_data, use_container_width=True)
+        ...
+
 
         # ── 6) 데이터 수정(expander) ───────────────────────────────────────────
         with st.expander("✏️ 데이터 수정", expanded=False):
