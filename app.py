@@ -642,7 +642,7 @@ st.set_page_config(page_title="인천항만공사 ESG 통합 포털", layout="ce
 st.title("📈 인천항만공사 ESG 통합 포털: 뉴스·선박·날씨·Chatbot·댓글·ESG 활동 참여·ESG 영상 모음")
 
 tabs = st.tabs([
-    "ESG 활동 참여", "ESG 영상 모음","구글 뉴스", "선박 관제정보","Chatbot", "댓글","오늘의 날씨"
+    "ESG 활동 참여", "ESG 영상 모음","구글 뉴스", "선박 관제정보","챗봇[GPT-4o]", "댓글","오늘의 날씨"
 ])
 
 with tabs[0]:
