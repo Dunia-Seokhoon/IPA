@@ -642,30 +642,29 @@ st.set_page_config(page_title="인천항만공사 ESG 통합 포털", layout="ce
 st.title("📈 인천항만공사 ESG 통합 포털: 뉴스·선박·날씨·Chatbot·댓글·ESG 활동 참여·ESG 영상 모음")
 
 tabs = st.tabs([
-    "구글 뉴스", "선박 관제정보", "오늘의 날씨", "Chatbot", "댓글", "ESG 활동 참여", "ESG 영상 모음"
+    "ESG 활동 참여", "ESG 영상 모음","구글 뉴스", "선박 관제정보","Chatbot", "댓글","오늘의 날씨"
 ])
 
 with tabs[0]:
-    google_news_section()   # 👈 딱 한 줄!
-
-with tabs[1]:
-    vessel_monitoring_section()
-
-with tabs[2]:
-    today_weather_section()
-
-with tabs[3]:
-    chatgpt_clone_section()
-
-with tabs[4]:
-    comments_section()
-
-with tabs[5]:
     participation_section()
 
-with tabs[6]:
+with tabs[1]:
     video_collection_section()
 
+with tabs[2]:
+    google_news_section()
+
+with tabs[3]:
+    vessel_monitoring_section()
+
+with tabs[4]:
+    chatgpt_clone_section()
+
+with tabs[5]:
+    comments_section()
+
+with tabs[6]:
+    today_weather_section()
 
 
 
