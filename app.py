@@ -492,6 +492,12 @@ def participation_section():
         if not all_data.empty:
             top_name = all_data["name"].value_counts().idxmax()
             st.markdown(f"### 🏆 이번주의 우수 ESG 사원: **{top_name}**")
+            
+        # 이번주의 우수 ESG 부서 (가장 많이 등록한 부서)
+        if not all_data.empty:
+            top_name = all_data["department"].value_counts().idxmax()
+            st.markdown(f"### 🏆 이번주의 우수 ESG 참여 부서: **{top_name}**")
+        
 
         # 다운로드 링크
         b64 = base64.b64encode(
