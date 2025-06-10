@@ -483,20 +483,16 @@ def participation_section():
             st.success("✅ 참여 정보가 등록되었습니다!")
 
 
-# ── 5) 저장된 데이터 로드 및 표시 ─────────────────────────────────────────
+    # ── 5) 저장된 데이터 로드 및 표시 ─────────────────────────────────────────
     try:
         all_data = pd.read_csv(csv_file, encoding="utf-8-sig")
         all_data = all_data.loc[:, expected_cols]  # 순서 보장
         all_data = all_data.sort_values(by="timestamp", ascending=False).reset_index(drop=True)
 
+        # 이번주의 우수 ESG 사원 (가장 많이 등록한 이름)
         if not all_data.empty:
-            # 우수 ESG 사원
-            top_person = all_data["name"].value_counts().idxmax()
-            st.markdown(f"### 🏆 이번주의 우수 ESG 사원: **{top_person}**")
-
-            # 우수 ESG 참여 부서
-            top_department = all_data["department"].value_counts().idxmax()
-            st.markdown(f"### 🏆 이번주의 우수 ESG 참여 부서: **{top_department}**")
+            top_name = all_data["name"].value_counts().idxmax()
+            st.markdown(f"### 🏆 이번주의 우수 ESG 사원: **{top_name}**")
 
         # 다운로드 링크
         b64 = base64.b64encode(
@@ -508,8 +504,7 @@ def participation_section():
         )
 
         st.dataframe(all_data, use_container_width=True)
-        …
-
+        ...
 
         # ── 6) 데이터 수정(expander) ───────────────────────────────────────────
         with st.expander("✏️ 데이터 수정", expanded=False):
