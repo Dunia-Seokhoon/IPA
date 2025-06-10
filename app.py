@@ -416,6 +416,7 @@ def participation_section():
         "사내 일회용품 사용 줄이기",
     ]
 
+    
     img_dir, csv_file = "participation_images", "participation.csv"
     os.makedirs(img_dir, exist_ok=True)
 
