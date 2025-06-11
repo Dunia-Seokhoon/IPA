@@ -56,7 +56,7 @@ def fetch_google_news(keyword: str, max_items: int = 10):
 
 def google_news_section():
     st.subheader("📰 Google News 검색")
-    kw        = st.text_input("키워드를 입력하세요", value="글로벌 ESG 현황")
+    kw        = st.text_input("키워드를 입력하세요 | 검색 후 링크 복사 기능을 활용하세요 ! ", value="글로벌 ESG 현황")
     max_items = st.slider("가져올 기사 개수", 5, 100, 10)
 
     if st.button("보기", key="news_btn"):
